@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Gratitude Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{--ac:#5ec9ff;--ac2:#2a8fd0;--bg:#08131f;--card:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.08);--muted:rgba(255,255,255,0.45);}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);background-image:radial-gradient(ellipse at top,#123c5e33 0%,transparent 60%);font-family:'Cairo',sans-serif;min-height:100vh;color:#fff;padding-bottom:60px;}
+  .topbar{background:linear-gradient(135deg,#123c5e,#0a2540);padding:18px 16px;border-bottom:1px solid rgba(94,201,255,0.15);}
+  .ti{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .ti h1{font-size:1.1rem;font-weight:900;color:var(--ac);}
+  .ti p{font-size:0.72rem;color:rgba(255,255,255,0.4);margin-top:2px;}
+  .acts{display:flex;gap:8px;flex-shrink:0;}
+  .rb{background:rgba(94,201,255,0.12);border:1px solid rgba(94,201,255,0.3);color:var(--ac);border-radius:20px;padding:8px 14px;font-family:'Cairo',sans-serif;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .content{padding:16px;display:flex;flex-direction:column;gap:14px;}
+  .st{font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;padding-left:2px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .sc{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 14px;position:relative;overflow:hidden;}
+  .sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ac),var(--ac2));opacity:0.5;}
+  .sc.full{grid-column:1/-1;}
+  .sct{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .scl{font-size:0.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.06em;}
+  .sci{font-size:1.4rem;}
+  .scv{font-size:2rem;font-weight:900;color:var(--ac);line-height:1;display:block;}
+  .sc.full .scv{font-size:2.6rem;}
+  .tc{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .th{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .th h3{font-size:0.88rem;font-weight:700;}
+  .cnt{background:rgba(94,201,255,0.12);color:var(--ac);border-radius:20px;padding:3px 10px;font-size:0.72rem;font-weight:700;}
+  .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{width:100%;border-collapse:collapse;font-size:0.8rem;min-width:560px;}
+  th{text-align:left;color:var(--muted);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.02);white-space:nowrap;}
+  td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .nm{font-weight:700;white-space:nowrap;}
+  .anon{color:var(--muted);font-style:italic;font-weight:400;}
+  .msg{color:rgba(255,255,255,0.75);font-size:0.78rem;line-height:1.6;min-width:220px;max-width:340px;}
+  .tm{color:rgba(255,255,255,0.28);font-size:0.7rem;white-space:nowrap;}
+  .lg{border-radius:6px;padding:2px 8px;font-size:0.68rem;font-weight:700;white-space:nowrap;}
+  .lg-en{background:rgba(94,201,255,0.12);color:var(--ac);}
+  .lg-ar{background:rgba(255,209,102,0.12);color:#ffd166;}
+  .ld{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 0;color:var(--muted);font-size:0.85rem;}
+  .sp{width:30px;height:30px;border:2.5px solid var(--border);border-top-color:var(--ac);border-radius:50%;animation:s .8s linear infinite;}
+  @keyframes s{to{transform:rotate(360deg);}}
+  .eb{background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.2);border-radius:12px;padding:16px;color:#ff9090;text-align:center;font-size:0.85rem;}
+  .em{text-align:center;padding:32px 16px;color:var(--muted);font-size:0.85rem;}
+  .ft{text-align:center;color:rgba(255,255,255,0.18);font-size:0.7rem;margin-top:24px;}
+  #gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;}
+  #gate h2{color:var(--ac);font-size:1.2rem;font-weight:800;}
+  #gate p{color:var(--muted);font-size:0.9rem;}
+  #gate a{color:var(--ac);text-decoration:none;border:1px solid rgba(94,201,255,0.35);border-radius:12px;padding:12px 24px;font-weight:700;margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div style="font-size:2.6rem">&#x1F512;</div>
+  <h2>Sign in required</h2>
+  <p>Please sign in from the admin page to view the dashboard.</p>
+  <a href="admin.html">Go to Admin</a>
+</div>
+
+<div id="main" style="display:none">
+  <div class="topbar">
+    <div class="ti">
+      <div>
+        <h1>&#x1F4CA; Gratitude Analytics</h1>
+        <p id="upd">Loading...</p>
+      </div>
+      <div class="acts">
+        <button class="rb" onclick="loadData()">&#8635; Refresh</button>
+        <button class="rb" onclick="location.href='admin.html'">Admin</button>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="st">&#x1F4CA; Overview</div>
+    <div id="stats"><div class="ld"><div class="sp"></div><p>Loading...</p></div></div>
+    <div class="st">&#x1F4CB; Cards Sent</div>
+    <div id="table"><div class="ld"><div class="sp"></div><p>Loading...</p></div></div>
+  </div>
+  <div class="ft">Abdul Latif Jameel &middot; Gratitude E-Cards</div>
+</div>
+
+<script>
+var TOKEN=sessionStorage.getItem('gratToken');
+if(!TOKEN){document.getElementById('gate').style.display='flex';}
+else{document.getElementById('gate').style.display='none';document.getElementById('main').style.display='block';loadData();setInterval(loadData,60000);}
+
+async function api(p){p.token=TOKEN;
+  var r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  return r.json();
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+async function loadData(){
+  document.getElementById('stats').innerHTML='<div class="ld"><div class="sp"></div><p>Loading...</p></div>';
+  document.getElementById('table').innerHTML='<div class="ld"><div class="sp"></div><p>Loading...</p></div>';
+  try{
+    var d=await api({action:'getDashboard'});
+    if(d.error){
+      if(d.error==='Not authorised'){sessionStorage.removeItem('gratToken');location.reload();return;}
+      throw new Error(d.error);
+    }
+    var rows=d.rows||[];
+    var total=rows.length;
+    var named=rows.filter(function(r){return r[0]&&r[0]!=='Anonymous';}).length;
+    var anon=total-named;
+    var ar=rows.filter(function(r){return r[3]==='ar';}).length;
+
+    document.getElementById('upd').textContent='Updated: '+new Date().toLocaleTimeString('en-GB');
+
+    document.getElementById('stats').innerHTML=
+      '<div class="grid">'+
+        '<div class="sc full"><div class="sct"><span class="scl">Total Cards Generated</span><span class="sci">&#x1F49B;</span></div><span class="scv">'+total.toLocaleString()+'</span></div>'+
+        '<div class="sc"><div class="sct"><span class="scl">Signed</span><span class="sci">&#x270D;&#xFE0F;</span></div><span class="scv">'+named.toLocaleString()+'</span></div>'+
+        '<div class="sc"><div class="sct"><span class="scl">Anonymous</span><span class="sci">&#x1F464;</span></div><span class="scv">'+anon.toLocaleString()+'</span></div>'+
+        '<div class="sc"><div class="sct"><span class="scl">English</span><span class="sci">&#x1F1EC;&#x1F1E7;</span></div><span class="scv">'+(total-ar).toLocaleString()+'</span></div>'+
+        '<div class="sc"><div class="sct"><span class="scl">Arabic</span><span class="sci">&#x1F1F8;&#x1F1E6;</span></div><span class="scv">'+ar.toLocaleString()+'</span></div>'+
+      '</div>';
+
+    var rev=rows.slice().reverse();
+    document.getElementById('table').innerHTML = rev.length ?
+      '<div class="tc"><div class="th"><h3>All Cards</h3><span class="cnt">'+total+' total</span></div>'+
+      '<div class="tw"><table><thead><tr><th>From</th><th>To</th><th>Message</th><th>Lang</th><th>Date</th><th>Time</th></tr></thead><tbody>'+
+      rev.map(function(r){
+        var from=r[0]||'';
+        var isAnon=!from||from==='Anonymous';
+        var lang=r[3]==='ar'?'ar':'en';
+        return '<tr>'+
+          '<td class="nm'+(isAnon?' anon':'')+'">'+esc(isAnon?'Anonymous':from)+'</td>'+
+          '<td class="nm">'+esc(r[1]||'-')+'</td>'+
+          '<td class="msg">'+esc(r[2]||'')+'</td>'+
+          '<td><span class="lg lg-'+lang+'">'+lang.toUpperCase()+'</span></td>'+
+          '<td class="tm">'+esc(r[6]||'-')+'</td>'+
+          '<td class="tm">'+esc(r[7]||'-')+'</td>'+
+          '</tr>';
+      }).join('')+'</tbody></table></div></div>'
+      : '<div class="tc"><div class="em">&#x1F4ED; No cards sent yet<br>Share the link with employees!</div></div>';
+  }catch(e){
+    document.getElementById('stats').innerHTML='<div class="eb"><strong>Could not load data</strong><br>'+esc(e.message)+'</div>';
+    document.getElementById('table').innerHTML='';
+  }
+}
+</script>
+</body>
+</html>

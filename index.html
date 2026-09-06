@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Gratitude E-Cards</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{min-height:100vh;background:linear-gradient(160deg,#0d1b3d 0%,#123c5e 50%,#0a2540 100%);font-family:'Tajawal',sans-serif;display:flex;flex-direction:column;align-items:center;padding:22px 16px 44px;color:#fff;}
+  .wrap{width:100%;max-width:430px;}
+
+  .langbar{display:flex;gap:8px;justify-content:center;margin-bottom:18px;}
+  .langbtn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.7);border-radius:20px;padding:7px 20px;font-family:'Tajawal',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;}
+  .langbtn.on{background:rgba(94,201,255,0.16);border-color:#5ec9ff;color:#5ec9ff;}
+
+  .header{text-align:center;margin-bottom:20px;}
+  .header h1{font-size:clamp(1.2rem,5vw,1.6rem);color:#5ec9ff;font-weight:800;margin-bottom:4px;}
+  .header p{font-size:0.9rem;color:rgba(255,255,255,0.55);}
+
+  .step-label{font-size:0.72rem;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.09em;margin:18px 0 10px;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .thumb{border:2px solid transparent;border-radius:12px;overflow:hidden;cursor:pointer;background:rgba(255,255,255,0.05);position:relative;}
+  .thumb img{width:100%;display:block;}
+  .thumb.on{border-color:#5ec9ff;}
+  .thumb .nm{font-size:0.72rem;padding:6px 8px;color:rgba(255,255,255,0.7);text-align:center;}
+
+  label{display:block;font-size:0.74rem;color:rgba(255,255,255,0.6);font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px;}
+  input[type=text],textarea{width:100%;background:rgba(255,255,255,0.09);border:1.5px solid rgba(255,255,255,0.16);border-radius:12px;padding:13px 15px;color:#fff;font-size:16px;font-family:'Tajawal',sans-serif;outline:none;-webkit-appearance:none;resize:vertical;}
+  input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.28);}
+  input:focus,textarea:focus{border-color:#5ec9ff;background:rgba(255,255,255,0.13);}
+  .field{margin-bottom:16px;}
+  .opt{font-weight:400;text-transform:none;letter-spacing:0;color:rgba(255,255,255,0.35);}
+
+  .presets{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .preset{background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px 14px;cursor:pointer;text-align:start;}
+  .preset.on{border-color:#5ec9ff;background:rgba(94,201,255,0.12);}
+  .preset .t{font-weight:800;font-size:0.92rem;margin-bottom:3px;}
+  .preset .d{font-size:0.8rem;color:rgba(255,255,255,0.55);line-height:1.5;}
+
+  .btn{width:100%;background:linear-gradient(135deg,#5ec9ff,#2a8fd0);color:#04182b;border:none;border-radius:14px;padding:16px;font-size:1.05rem;font-family:'Tajawal',sans-serif;font-weight:800;cursor:pointer;min-height:52px;margin-top:6px;}
+  .btn:active{transform:scale(0.98);}
+  .btn-ghost{width:100%;background:rgba(255,255,255,0.08);color:#fff;border:1.5px solid rgba(255,255,255,0.2);border-radius:14px;padding:15px;font-size:1rem;font-family:'Tajawal',sans-serif;font-weight:700;cursor:pointer;min-height:52px;}
+
+  #cardCanvas{display:none;}
+  #resultImg{width:100%;border-radius:14px;box-shadow:0 16px 60px rgba(0,0,0,0.6);display:block;}
+  .hintbox{background:rgba(94,201,255,0.1);border:1.5px solid rgba(94,201,255,0.3);border-radius:14px;padding:15px 17px;margin:16px 0;}
+  .hintbox strong{color:#5ec9ff;display:block;margin-bottom:6px;font-size:0.95rem;}
+  .hintbox .s{background:rgba(255,255,255,0.06);border-radius:8px;padding:8px 12px;margin-top:8px;font-size:0.83rem;line-height:1.7;color:rgba(255,255,255,0.85);}
+
+  #loadingBox{display:flex;flex-direction:column;align-items:center;gap:14px;padding:60px 0;color:rgba(255,255,255,0.5);font-size:0.9rem;}
+  .spin{width:34px;height:34px;border:3px solid rgba(255,255,255,0.12);border-top-color:#5ec9ff;border-radius:50%;animation:sp .8s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  #closedBox{display:none;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:50px 20px;}
+  #closedBox .big{font-size:3rem;}
+  #closedBox h2{color:#5ec9ff;font-size:1.3rem;font-weight:800;}
+  #closedBox p{color:rgba(255,255,255,0.6);font-size:0.95rem;line-height:1.8;}
+  #blockScreen{display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#0d1b3d 0%,#123c5e 50%,#0a2540 100%);flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;gap:18px;}
+  .err{color:#ff9090;text-align:center;font-size:0.9rem;padding:20px;}
+  #formView,#resultView{display:none;}
+  #formView.on,#resultView.on{display:block;}
+  html[dir=rtl] .preset{text-align:right;}
+</style>
+</head>
+<body>
+
+<div id="blockScreen">
+  <div style="font-size:3rem;">&#x1F310;</div>
+  <h2 style="color:#5ec9ff;font-size:1.35rem;font-weight:800;">Open in your browser</h2>
+  <p style="color:rgba(255,255,255,0.8);font-size:1rem;line-height:1.7;">This page must be opened in <b style="color:#5ec9ff;">Safari</b> or <b style="color:#5ec9ff;">Chrome</b><br>to create and save your card.</p>
+  <button class="btn" style="max-width:340px" onclick="tryOpenBrowser()">Open in Browser</button>
+</div>
+
+<div class="wrap">
+  <div class="langbar" id="langbar" style="display:none">
+    <button class="langbtn on" id="lb-en" onclick="setLang('en')">English</button>
+    <button class="langbtn" id="lb-ar" onclick="setLang('ar')">&#x0627;&#x0644;&#x0639;&#x0631;&#x0628;&#x064A;&#x0629;</button>
+  </div>
+
+  <div class="header" id="pageHeader" style="display:none">
+    <h1 id="pageTitle"></h1>
+    <p id="pageSub"></p>
+  </div>
+
+  <div id="loadingBox"><div class="spin"></div><p>Loading...</p></div>
+
+  <div id="closedBox">
+    <div class="big">&#x23F3;</div>
+    <h2 id="closedTitle">Coming Soon</h2>
+    <p id="closedMsg"></p>
+  </div>
+
+  <div id="formView">
+    <canvas id="cardCanvas" width="1080" height="1350"></canvas>
+
+    <div id="designSection">
+      <div class="step-label" id="lblChoose">Choose a card</div>
+      <div class="grid" id="designGrid"></div>
+    </div>
+
+    <div class="step-label" id="lblDetails">Your message</div>
+
+    <div class="field">
+      <label id="lblTo">To</label>
+      <input type="text" id="toInput" maxlength="40" />
+    </div>
+
+    <div class="field">
+      <label id="lblMsg">Message</label>
+      <div class="presets" id="presetList"></div>
+      <textarea id="msgInput" rows="3" maxlength="300"></textarea>
+    </div>
+
+    <div class="field">
+      <label id="lblFrom">From <span class="opt" id="lblFromOpt">(optional)</span></label>
+      <input type="text" id="fromInput" maxlength="40" />
+    </div>
+
+    <button class="btn" onclick="generateCard()" id="btnGen">Create My Card</button>
+  </div>
+
+  <div id="resultView">
+    <img id="resultImg" alt="" />
+    <div class="hintbox">
+      <strong id="lblSave">How to save your card</strong>
+      <div class="s" id="lblIos"></div>
+      <div class="s" id="lblAnd"></div>
+    </div>
+    <a id="dl" style="width:100%;display:none"><button class="btn" id="btnDl">Download</button></a>
+    <button class="btn-ghost" style="margin-top:10px" onclick="goBack()" id="btnBack">Make another card</button>
+  </div>
+</div>
+
+<script src="render.js"></script>
+<script src="fonts.js"></script>
+<script>
+var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+var LANG='en', CFG=null, DESIGNS=[], SELECTED=null, DESIGN_CACHE={}, tplImg=new Image(), imgReady=false, fontsReady=false;
+
+var T={
+  en:{choose:'Choose a card',details:'Your message',to:'To',msg:'Message',from:'From',opt:'(optional)',
+      gen:'Create My Card',back:'Make another card',dl:'Download Card',save:'How to save your card',
+      ios:'<b>iPhone:</b> Press &amp; hold the image above, then tap <b>"Add to Photos"</b>',
+      and:'<b>Android:</b> Tap the download button below',
+      toPh:'Colleague\u2019s name',msgPh:'Write your own message, or pick one above',fromPh:'Your name \u2014 leave blank to stay anonymous',
+      needTo:'Please enter who this card is for.',needMsg:'Please write or choose a message.',wait:'Still loading, please try again in a moment.'},
+  ar:{choose:'\u0627\u062E\u062A\u0631 \u0628\u0637\u0627\u0642\u0629',details:'\u0631\u0633\u0627\u0644\u062A\u0643',to:'\u0625\u0644\u0649',msg:'\u0627\u0644\u0631\u0633\u0627\u0644\u0629',from:'\u0645\u0646',opt:'(\u0627\u062E\u062A\u064A\u0627\u0631\u064A)',
+      gen:'\u0623\u0646\u0634\u0626 \u0627\u0644\u0628\u0637\u0627\u0642\u0629',back:'\u0625\u0646\u0634\u0627\u0621 \u0628\u0637\u0627\u0642\u0629 \u0623\u062E\u0631\u0649',dl:'\u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0628\u0637\u0627\u0642\u0629',save:'\u0643\u064A\u0641 \u062A\u062D\u0641\u0638 \u0628\u0637\u0627\u0642\u062A\u0643',
+      ios:'<b>\u0622\u064A\u0641\u0648\u0646:</b> \u0627\u0636\u063A\u0637 \u0645\u0637\u0648\u0644\u0627\u064B \u0639\u0644\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u062B\u0645 \u0627\u062E\u062A\u0631 <b>\u0625\u0636\u0627\u0641\u0629 \u0625\u0644\u0649 \u0627\u0644\u0635\u0648\u0631</b>',
+      and:'<b>\u0623\u0646\u062F\u0631\u0648\u064A\u062F:</b> \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0632\u0631 \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0628\u0627\u0644\u0623\u0633\u0641\u0644',
+      toPh:'\u0627\u0633\u0645 \u0627\u0644\u0632\u0645\u064A\u0644',msgPh:'\u0627\u0643\u062A\u0628 \u0631\u0633\u0627\u0644\u062A\u0643 \u0623\u0648 \u0627\u062E\u062A\u0631 \u0648\u0627\u062D\u062F\u0629 \u0645\u0645\u0627 \u0633\u0628\u0642',fromPh:'\u0627\u0633\u0645\u0643 \u2014 \u0627\u062A\u0631\u0643\u0647 \u0641\u0627\u0631\u063A\u0627\u064B \u0644\u0644\u0625\u0631\u0633\u0627\u0644 \u062F\u0648\u0646 \u0627\u0633\u0645',
+      needTo:'\u0627\u0644\u0631\u062C\u0627\u0621 \u0643\u062A\u0627\u0628\u0629 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0644\u0645.',needMsg:'\u0627\u0644\u0631\u062C\u0627\u0621 \u0643\u062A\u0627\u0628\u0629 \u0623\u0648 \u0627\u062E\u062A\u064A\u0627\u0631 \u0631\u0633\u0627\u0644\u0629.',wait:'\u062C\u0627\u0631\u064D \u0627\u0644\u062A\u062D\u0645\u064A\u0644\u060C \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.'}
+};
+
+if(window.loadPreviewFonts) window.loadPreviewFonts().then(function(){fontsReady=true;});
+else fontsReady=true;
+
+function isInAppBrowser(){
+  var ua=navigator.userAgent||'';
+  return /OracleMobileApp|Oracle|FBAN|FBAV|Instagram|LinkedInApp|MicroMessenger|GSA/.test(ua)||(/wv/.test(ua)&&/Android/.test(ua))||(/AppleWebKit/.test(ua)&&!/Safari/.test(ua));
+}
+function tryOpenBrowser(){
+  var url=window.location.href;
+  if(isIOS){
+    window.location.href='x-web-search://?q='+encodeURIComponent(url);
+    setTimeout(function(){if(navigator.clipboard){navigator.clipboard.writeText(url).then(function(){alert('Link copied. Open it in Safari.');});}else{alert('Open in Safari:\n\n'+url);}},500);
+  }else{
+    window.location.href='intent://'+url.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
+    setTimeout(function(){window.open(url,'_system');},500);
+  }
+}
+
+async function api(p){
+  var r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  return r.json();
+}
+
+function setLang(l){
+  LANG=l;
+  document.documentElement.lang=l;
+  document.documentElement.dir=(l==='ar'?'rtl':'ltr');
+  document.getElementById('lb-en').className='langbtn'+(l==='en'?' on':'');
+  document.getElementById('lb-ar').className='langbtn'+(l==='ar'?' on':'');
+  applyText();
+  renderDesigns();
+  renderPresets();
+}
+
+function applyText(){
+  var t=T[LANG], x=CFG&&CFG.text||{};
+  var title=(LANG==='ar'?x.titleAr:x.titleEn)||'';
+  var sub=(LANG==='ar'?x.subtitleAr:x.subtitleEn)||'';
+  var hdr=document.getElementById('pageHeader'), any=false;
+  if(title){document.getElementById('pageTitle').textContent=title;document.getElementById('pageTitle').style.display='';any=true;}
+  else document.getElementById('pageTitle').style.display='none';
+  if(sub){document.getElementById('pageSub').textContent=sub;document.getElementById('pageSub').style.display='';any=true;}
+  else document.getElementById('pageSub').style.display='none';
+  hdr.style.display=any?'block':'none';
+
+  document.getElementById('lblChoose').textContent=t.choose;
+  document.getElementById('lblDetails').textContent=t.details;
+  document.getElementById('lblTo').textContent=t.to;
+  document.getElementById('lblMsg').textContent=t.msg;
+  document.getElementById('lblFrom').innerHTML=t.from+' <span class="opt">'+t.opt+'</span>';
+  document.getElementById('toInput').placeholder=t.toPh;
+  document.getElementById('msgInput').placeholder=t.msgPh;
+  document.getElementById('fromInput').placeholder=t.fromPh;
+  document.getElementById('btnGen').textContent=t.gen;
+  document.getElementById('btnBack').textContent=t.back;
+  document.getElementById('btnDl').textContent=t.dl;
+  document.getElementById('lblSave').textContent=t.save;
+  document.getElementById('lblIos').innerHTML=t.ios;
+  document.getElementById('lblAnd').innerHTML=t.and;
+}
+
+function renderDesigns(){
+  var list=DESIGNS.filter(function(d){return d.lang===LANG;});
+  var g=document.getElementById('designGrid');
+  document.getElementById('designSection').style.display=list.length>1?'block':'none';
+  g.innerHTML=list.map(function(d){
+    return '<div class="thumb'+(SELECTED===d.id?' on':'')+'" onclick="pickDesign(\''+d.id+'\')">'+
+      (d.thumb?'<img src="data:image/jpeg;base64,'+d.thumb+'" alt="">':'')+
+      '<div class="nm">'+(d.name||'')+'</div></div>';
+  }).join('');
+  if(!list.length){ g.innerHTML='<div style="grid-column:1/-1;color:rgba(255,255,255,0.4);font-size:0.85rem;text-align:center;padding:14px">No cards available for this language yet.</div>'; }
+  else if(!list.some(function(d){return d.id===SELECTED;})) pickDesign(list[0].id);
+}
+
+function renderPresets(){
+  var arr=(CFG&&CFG.presets&&CFG.presets[LANG])||[];
+  document.getElementById('presetList').innerHTML=arr.map(function(p,i){
+    return '<div class="preset" id="ps'+i+'" onclick="usePreset('+i+')">'+
+      '<div class="t">'+(p.icon||'')+' '+(p.label||'')+'</div>'+
+      '<div class="d">'+(p.text||'')+'</div></div>';
+  }).join('');
+}
+
+function usePreset(i){
+  var arr=(CFG&&CFG.presets&&CFG.presets[LANG])||[];
+  if(!arr[i]) return;
+  document.getElementById('msgInput').value=arr[i].text||'';
+  arr.forEach(function(_,j){ var el=document.getElementById('ps'+j); if(el) el.className='preset'+(i===j?' on':''); });
+}
+
+async function pickDesign(id){
+  SELECTED=id;
+  renderDesigns();
+  imgReady=false;
+  if(DESIGN_CACHE[id]){ applyDesign(DESIGN_CACHE[id]); return; }
+  var d=await api({action:'getDesign',id:id});
+  if(d.error) return;
+  DESIGN_CACHE[id]=d;
+  applyDesign(d);
+}
+
+function applyDesign(d){
+  tplImg=new Image();
+  tplImg.onload=function(){imgReady=true;};
+  tplImg.src='data:image/jpeg;base64,'+d.image;
+}
+
+async function init(){
+  if(isInAppBrowser()){
+    document.getElementById('loadingBox').style.display='none';
+    document.getElementById('blockScreen').style.display='flex';
+    return;
+  }
+  try{
+    var d=await api({action:'getPublicConfig'});
+    CFG=d;
+    document.getElementById('loadingBox').style.display='none';
+    document.getElementById('langbar').style.display='flex';
+    if(d.status!=='open'){
+      applyText();
+      var x=d.text||{};
+      document.getElementById('closedTitle').textContent=(LANG==='ar'?x.closedTitleAr:x.closedTitleEn)||'Coming Soon';
+      document.getElementById('closedMsg').textContent=(LANG==='ar'?x.closedMsgAr:x.closedMsgEn)||'';
+      document.getElementById('closedBox').style.display='flex';
+      document.getElementById('pageHeader').style.display='none';
+      return;
+    }
+    DESIGNS=d.designs||[];
+    setLang('en');
+    document.getElementById('formView').classList.add('on');
+  }catch(e){
+    document.getElementById('loadingBox').innerHTML='<p class="err">Could not load. Please refresh.</p>';
+  }
+}
+init();
+
+function generateCard(){
+  var t=T[LANG];
+  var to=document.getElementById('toInput').value.trim();
+  var msg=document.getElementById('msgInput').value.trim();
+  var from=document.getElementById('fromInput').value.trim();
+  if(!to){alert(t.needTo);return;}
+  if(!msg){alert(t.needMsg);return;}
+  if(!fontsReady||!imgReady||!SELECTED){alert(t.wait);return;}
+
+  var d=DESIGN_CACHE[SELECTED];
+  var canvas=document.getElementById('cardCanvas');
+  CardRender.render(canvas,tplImg,d.boxes,{to:to,message:msg,from:from});
+
+  var url=canvas.toDataURL('image/png');
+  document.getElementById('resultImg').src=url;
+  var a=document.getElementById('dl');
+  a.href=url;
+  a.download='gratitude-card.png';
+  a.style.display=isIOS?'none':'block';
+
+  document.getElementById('formView').classList.remove('on');
+  document.getElementById('resultView').classList.add('on');
+  document.getElementById('pageHeader').style.display='none';
+  document.getElementById('langbar').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+
+  api({action:'saveCard',to:to,message:msg,from:from,lang:LANG,designId:SELECTED,device:isIOS?'iPhone':'Android'});
+}
+
+function goBack(){
+  document.getElementById('resultView').classList.remove('on');
+  document.getElementById('formView').classList.add('on');
+  document.getElementById('langbar').style.display='flex';
+  applyText();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
