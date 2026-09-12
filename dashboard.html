@@ -166,7 +166,7 @@ async function loadData(){
         return '<tr>'+
           '<td class="nm'+(isAnon?' anon':'')+'">'+esc(isAnon?'Anonymous':from)+'</td>'+
           '<td class="nm">'+esc(r[1]||'-')+'</td>'+
-          '<td class="msg">'+esc(r[2]||'')+'</td>'+
+          '<td class="msg">'+(r[8]?'<b style="color:var(--txt)">'+esc(r[8])+'</b><br>':'')+esc(r[2]||'')+'</td>'+
           '<td><span class="lg lg-'+lang+'">'+lang.toUpperCase()+'</span></td>'+
           '<td class="tm">'+esc(r[6]||'-')+'</td>'+
           '<td class="tm">'+esc(r[7]||'-')+'</td>'+

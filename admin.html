@@ -147,7 +147,7 @@
 
     <div class="panel">
       <h2>Message Presets</h2>
-      <div class="hint">Tappable suggestions shown under the message field. Employees can still type their own.</div>
+      <div class="hint">Each preset is a message type. Its heading is printed on the card, and the employee writes their own words underneath it.</div>
       <div class="tabs">
         <button class="tb on" id="pt-en" onclick="switchPreset('en')">English</button>
         <button class="tb" id="pt-ar" onclick="switchPreset('ar')">&#x0627;&#x0644;&#x0639;&#x0631;&#x0628;&#x064A;&#x0629;</button>
@@ -201,7 +201,8 @@
 
       <div class="three" style="margin-top:16px">
         <div class="fld">Sample "To"<input type="text" id="sTo" value="Sarah" oninput="drawPreview()" /></div>
-        <div class="fld">Sample message<input type="text" id="sMsg" value="Thank you for your support, teamwork, and reliable help." oninput="drawPreview()" /></div>
+        <div class="fld">Sample heading<input type="text" id="sHead" value="Thank You" oninput="drawPreview()" /></div>
+        <div class="fld">Sample message<input type="text" id="sMsg" value="You saved me on the Q3 report and stayed late three nights running." oninput="drawPreview()" /></div>
         <div class="fld">Sample "From"<input type="text" id="sFrom" value="Ahmed" oninput="drawPreview()" /></div>
       </div>
 
@@ -291,8 +292,7 @@ function renderPresetEditor(){
   document.getElementById('presetEditor').innerHTML=arr.map(function(p,i){
     return '<div class="pcard">'+
       '<div class="r"><input type="text" value="'+esc(p.icon||'')+'" oninput="upPreset('+i+',\'icon\',this.value)" placeholder="\u2B50">'+
-      '<input type="text" value="'+esc(p.label||'')+'" oninput="upPreset('+i+',\'label\',this.value)" placeholder="Short label"'+rtl+'></div>'+
-      '<textarea rows="2" oninput="upPreset('+i+',\'text\',this.value)" placeholder="Full message"'+rtl+'>'+esc(p.text||'')+'</textarea>'+
+      '<input type="text" value="'+esc(p.label||'')+'" oninput="upPreset('+i+',\'label\',this.value)" placeholder="Heading shown on the card"'+rtl+'></div>'+
       '<div style="text-align:end;margin-top:8px"><button class="btn-danger" onclick="rmPreset('+i+')">Remove</button></div>'+
       '</div>';
   }).join('')||'<div class="hint">No presets yet.</div>';
@@ -466,6 +466,7 @@ function drawPreview(){
   if(!CUR)return;
   CardRender.render(document.getElementById('previewCanvas'),tplImg,CUR.boxes,{
     to:document.getElementById('sTo').value,
+    heading:document.getElementById('sHead').value,
     message:document.getElementById('sMsg').value,
     from:document.getElementById('sFrom').value
   });

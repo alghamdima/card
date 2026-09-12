@@ -1,5 +1,5 @@
-/* Shared card renderer — used by both index.html and admin.html
-   so the admin preview is pixel-identical to what employees get. */
+/* Shared card renderer — used by index.html (preview + export) and admin.html
+   so the preview is always identical to the downloaded PNG. */
 (function (root) {
 
   var CANVAS_W = 1080, CANVAS_H = 1350;
@@ -8,18 +8,14 @@
 
   function fontFor(text, size, weight) {
     var ar = isArabic(text);
-    var fam;
-    if (weight === 'bold') fam = ar ? 'LumaSemiBold' : 'KarbonBold';
-    else fam = ar ? 'LumaRegular' : 'KarbonRegular';
+    var fam = (weight === 'bold') ? (ar ? 'LumaSemiBold' : 'KarbonBold')
+                                  : (ar ? 'LumaRegular'  : 'KarbonRegular');
     return size + 'px "' + fam + '"';
   }
 
-  // Break text into lines that fit maxW. Falls back to hard character
-  // splitting for single words longer than the box.
   function wrapLines(ctx, text, maxW) {
-    var paras = String(text).split('\n');
     var out = [];
-    paras.forEach(function (para) {
+    String(text).split('\n').forEach(function (para) {
       var words = para.split(/\s+/).filter(Boolean);
       if (!words.length) { out.push(''); return; }
       var cur = '';
@@ -27,7 +23,6 @@
         var test = cur ? cur + ' ' + w : w;
         if (ctx.measureText(test).width <= maxW) { cur = test; return; }
         if (cur) out.push(cur);
-        // word alone still too wide -> hard split it
         if (ctx.measureText(w).width > maxW) {
           var piece = '';
           for (var i = 0; i < w.length; i++) {
@@ -43,59 +38,84 @@
     return out;
   }
 
-  // Shrink until the wrapped block fits the box in both directions.
-  function fitBlock(ctx, text, box, weight) {
+  var HEAD_RATIO = 1.28;
+  var GAP_RATIO  = 0.55;
+
+  /* Lay out an optional heading above a body, scaled together to fit the box. */
+  function fitBlock(ctx, heading, body, box) {
     var maxSize = Number(box.size) || 40;
-    var minSize = Math.max(10, Math.round(maxSize * 0.35));
+    var minSize = Math.max(9, Math.round(maxSize * 0.32));
     var boxH = box.bottom - box.top;
-    var size = maxSize;
-    while (size >= minSize) {
-      ctx.font = fontFor(text, size, weight);
-      var lines = wrapLines(ctx, text, box.maxW);
-      var lh = size * 1.32;
-      var totalH = lines.length * lh;
-      var widest = 0;
-      lines.forEach(function (l) { widest = Math.max(widest, ctx.measureText(l).width); });
-      if (totalH <= boxH && widest <= box.maxW) return { size: size, lines: lines, lh: lh };
-      size -= 1;
+
+    for (var size = maxSize; size >= minSize; size--) {
+      var plan = [], total = 0, widest = 0;
+
+      if (heading) {
+        var hs = Math.round(size * HEAD_RATIO);
+        ctx.font = fontFor(heading, hs, 'bold');
+        var hl = wrapLines(ctx, heading, box.maxW);
+        var hlh = hs * 1.24;
+        hl.forEach(function (l) { widest = Math.max(widest, ctx.measureText(l).width); });
+        plan.push({ lines: hl, size: hs, lh: hlh, weight: 'bold', text: heading, head: true });
+        total += hl.length * hlh;
+        if (body) total += size * GAP_RATIO;
+      }
+
+      if (body) {
+        var bw = (box.weight === 'bold') ? 'bold' : 'regular';
+        ctx.font = fontFor(body, size, bw);
+        var bl = wrapLines(ctx, body, box.maxW);
+        var blh = size * 1.32;
+        bl.forEach(function (l) { widest = Math.max(widest, ctx.measureText(l).width); });
+        plan.push({ lines: bl, size: size, lh: blh, weight: bw, text: body, head: false });
+        total += bl.length * blh;
+      }
+
+      if (!plan.length) return null;
+      if ((total <= boxH && widest <= box.maxW) || size === minSize) {
+        return { plan: plan, total: total, gap: size * GAP_RATIO };
+      }
     }
-    ctx.font = fontFor(text, minSize, weight);
-    var ls = wrapLines(ctx, text, box.maxW);
-    return { size: minSize, lines: ls, lh: minSize * 1.32 };
+    return null;
   }
 
-  function drawBox(ctx, text, box) {
-    if (!text || !box) return;
-    var weight = box.weight === 'bold' ? 'bold' : 'regular';
-    var fit = fitBlock(ctx, text, box, weight);
-    ctx.font = fontFor(text, fit.size, weight);
-    ctx.fillStyle = box.color || '#FFFFFF';
+  function drawBlock(ctx, heading, body, box) {
+    if ((!heading && !body) || !box) return;
+    var fit = fitBlock(ctx, heading, body, box);
+    if (!fit) return;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    var totalH = fit.lines.length * fit.lh;
-    var startY = box.top + (box.bottom - box.top - totalH) / 2 + fit.lh / 2;
-    fit.lines.forEach(function (line, i) {
-      ctx.fillText(line, box.centerX, startY + i * fit.lh);
+    var y = box.top + (box.bottom - box.top - fit.total) / 2;
+    fit.plan.forEach(function (part) {
+      ctx.font = fontFor(part.text, part.size, part.weight);
+      ctx.fillStyle = part.head ? (box.color || '#FFFFFF')
+                                : (box.bodyColor || box.color || '#FFFFFF');
+      part.lines.forEach(function (line) {
+        ctx.fillText(line, box.centerX, y + part.lh / 2);
+        y += part.lh;
+      });
+      if (part.head && body) y += fit.gap;
     });
   }
 
-  // data = { to, message, from }   boxes = { to:{...}, message:{...}, from:{...} }
+  function drawBox(ctx, text, box) { drawBlock(ctx, '', text, box); }
+
+  /* data = { to, heading, message, from } */
   function render(canvas, img, boxes, data) {
     var ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     if (img && img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
     if (!boxes) return;
-    drawBox(ctx, (data.to || '').trim(), boxes.to);
-    drawBox(ctx, (data.message || '').trim(), boxes.message);
-    // From is omitted entirely when blank — anonymous cards stay clean
+    drawBlock(ctx, '', (data.to || '').trim(), boxes.to);
+    drawBlock(ctx, (data.heading || '').trim(), (data.message || '').trim(), boxes.message);
     var from = (data.from || '').trim();
-    if (from) drawBox(ctx, from, boxes.from);
+    if (from) drawBlock(ctx, '', from, boxes.from);
   }
 
   function defaultBoxes() {
     return {
       to:      { top: 300, bottom: 400,  centerX: 540, maxW: 700, size: 52, color: '#FFFFFF', weight: 'bold' },
-      message: { top: 470, bottom: 800,  centerX: 540, maxW: 760, size: 42, color: '#FFFFFF', weight: 'regular' },
+      message: { top: 470, bottom: 800,  centerX: 540, maxW: 760, size: 40, color: '#FFFFFF', weight: 'regular' },
       from:    { top: 900, bottom: 1000, centerX: 540, maxW: 700, size: 44, color: '#FFFFFF', weight: 'bold' }
     };
   }
@@ -104,6 +124,7 @@
     W: CANVAS_W, H: CANVAS_H,
     isArabic: isArabic,
     render: render,
+    drawBox: drawBox,
     defaultBoxes: defaultBoxes
   };
 

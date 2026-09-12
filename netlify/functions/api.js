@@ -126,21 +126,21 @@ async function ensureTabs() {
   }
   if (!tabs.includes(T_CARDS)) {
     await addTab(T_CARDS);
-    await sSet(T_CARDS + '!A1:H1', [['From', 'To', 'Message', 'Language', 'Design', 'Device', 'Date', 'Time']]);
+    await sSet(T_CARDS + '!A1:I1', [['From', 'To', 'Message', 'Language', 'Design', 'Device', 'Date', 'Time', 'Heading']]);
   }
 }
 
 // ── Config ──
 const DEFAULT_PRESETS_EN = JSON.stringify([
-  { icon: '\u2B50', label: 'Thank You', text: 'Thank you for your support, teamwork, and reliable help.' },
-  { icon: '\uD83D\uDCA1', label: 'You Inspire Me', text: 'Thank you for your creative vision and leadership.' },
-  { icon: '\u2600\uFE0F', label: 'You Made My Day', text: 'Thank you for the good vibes, laughs, and daily kindness.' }
+  { icon: '\u2B50', label: 'Thank You', text: '' },
+  { icon: '\uD83D\uDCA1', label: 'You Inspire Me', text: '' },
+  { icon: '\u2600\uFE0F', label: 'You Made My Day', text: '' }
 ]);
 
 const DEFAULT_PRESETS_AR = JSON.stringify([
-  { icon: '\u2B50', label: '\u0634\u0643\u0631\u0627\u064B \u0644\u0643', text: '\u0634\u0643\u0631\u0627\u064B \u0644\u0643 \u0639\u0644\u0649 \u0627\u0644\u062F\u0639\u0645\u060C \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A\u060C \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0627\u0644\u0645\u0648\u062B\u0648\u0642\u0629.' },
-  { icon: '\uD83D\uDCA1', label: '\u0623\u0646\u062A \u062A\u0644\u0647\u0645\u0646\u064A', text: '\u0634\u0643\u0631\u0627\u064B \u0644\u0643 \u0639\u0644\u0649 \u0627\u0644\u0631\u0624\u064A\u0629 \u0627\u0644\u0625\u0628\u062F\u0627\u0639\u064A\u0629 \u0648\u0627\u0644\u0642\u064A\u0627\u062F\u0629.' },
-  { icon: '\u2600\uFE0F', label: '\u0644\u0642\u062F \u0623\u0633\u0639\u062F\u062A \u064A\u0648\u0645\u064A', text: '\u0634\u0643\u0631\u0627\u064B \u0644\u0643 \u0639\u0644\u0649 \u0627\u0644\u0637\u0627\u0642\u0629 \u0627\u0644\u0625\u064A\u062C\u0627\u0628\u064A\u0629\u060C \u0648\u0627\u0644\u0636\u062D\u0643\u0627\u062A\u060C \u0648\u0627\u0644\u0644\u0637\u0641 \u0627\u0644\u064A\u0648\u0645\u064A.' }
+  { icon: '\u2B50', label: '\u0634\u0643\u0631\u0627\u064B \u0644\u0643', text: '' },
+  { icon: '\uD83D\uDCA1', label: '\u0623\u0646\u062A \u062A\u0644\u0647\u0645\u0646\u064A', text: '' },
+  { icon: '\u2600\uFE0F', label: '\u0644\u0642\u062F \u0623\u0633\u0639\u062F\u062A \u064A\u0648\u0645\u064A', text: '' }
 ]);
 
 const DEFAULTS = {
@@ -281,6 +281,7 @@ exports.handler = async function (event) {
       const from = String(body.from || '').slice(0, 60);
       const to = String(body.to || '').slice(0, 60);
       const msg = String(body.message || '').slice(0, 400);
+      const heading = String(body.heading || '').slice(0, 80);
       const lang = body.lang === 'ar' ? 'ar' : 'en';
       const design = String(body.designId || '').slice(0, 20);
       const device = body.device === 'iPhone' ? 'iPhone' : 'Android';
@@ -288,7 +289,7 @@ exports.handler = async function (event) {
       const o = { timeZone: 'Asia/Riyadh' };
       await sAppend(T_CARDS, [
         from || 'Anonymous', to, msg, lang, design, device,
-        now.toLocaleDateString('en-GB', o), now.toLocaleTimeString('en-GB', o)
+        now.toLocaleDateString('en-GB', o), now.toLocaleTimeString('en-GB', o), heading
       ]);
       return ok({ saved: true });
     }
@@ -377,7 +378,7 @@ exports.handler = async function (event) {
 
     if (action === 'getDashboard') {
       await ensureTabs();
-      const rows = await sGet(T_CARDS + '!A:H');
+      const rows = await sGet(T_CARDS + '!A:I');
       const data = rows.filter((r, i) => i > 0 && (r[0] || r[1]));
       return ok({ rows: data });
     }
