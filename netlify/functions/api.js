@@ -86,15 +86,19 @@ async function sClear(range) {
     { method: 'POST', headers: { Authorization: 'Bearer ' + t } });
 }
 
-async function listTabs() {
+let tabCache = null;
+async function listTabs(force) {
+  if (tabCache && !force) return tabCache;
   const t = await getToken();
   const r = await fetch(API + SHEET_ID + '?fields=sheets.properties.title',
     { headers: { Authorization: 'Bearer ' + t } });
   const d = await r.json();
-  return (d.sheets || []).map(s => s.properties.title);
+  tabCache = (d.sheets || []).map(s => s.properties.title);
+  return tabCache;
 }
 
 async function addTab(title) {
+  if (tabCache && tabCache.indexOf(title) < 0) tabCache.push(title);
   const t = await getToken();
   await fetch(API + SHEET_ID + ':batchUpdate', {
     method: 'POST',
@@ -104,6 +108,7 @@ async function addTab(title) {
 }
 
 async function delTab(title) {
+  if (tabCache) tabCache = tabCache.filter(x => x !== title);
   const t = await getToken();
   const r = await fetch(API + SHEET_ID + '?fields=sheets.properties',
     { headers: { Authorization: 'Bearer ' + t } });
@@ -191,9 +196,10 @@ async function readDesigns() {
 }
 
 async function writeDesigns(list) {
-  await sClear(T_DESIGNS + '!A2:F');
-  if (!list.length) return;
+  // pad with blank rows so a single write also erases anything removed
   const rows = list.map(d => [d.id, d.name, d.lang, JSON.stringify(d.boxes || {}), d.thumb || '', d.active === false ? 'no' : 'yes']);
+  const pad = Math.max(60, rows.length + 10);
+  while (rows.length < pad) rows.push(['', '', '', '', '', '']);
   await sSet(T_DESIGNS + '!A2:F' + (rows.length + 1), rows);
 }
 
@@ -207,10 +213,12 @@ async function readImage(id) {
 async function writeImage(id, b64) {
   const tabs = await listTabs();
   if (!tabs.includes(imgTab(id))) await addTab(imgTab(id));
-  await sClear(imgTab(id) + '!A:A');
   const chunks = [];
   for (let i = 0; i < b64.length; i += CHUNK) chunks.push([b64.slice(i, i + CHUNK)]);
   if (!chunks.length) return;
+  // pad so one write replaces a previously longer image, no separate clear
+  const pad = Math.max(45, chunks.length + 8);
+  while (chunks.length < pad) chunks.push(['']);
   await sSet(imgTab(id) + '!A1:A' + chunks.length, chunks);
 }
 
@@ -355,15 +363,20 @@ exports.handler = async function (event) {
       }
       await writeDesigns(list);
       if (body.image) await writeImage(id, String(body.image));
-      return ok({ saved: true, id: id });
+      return ok({ saved: true, id: id,
+        designs: list.map(d => ({ id: d.id, name: d.name, lang: d.lang,
+                                  boxes: d.boxes, thumb: d.thumb, active: d.active })) });
     }
 
     if (action === 'deleteDesign') {
       const id = String(body.id || '');
       const list = await readDesigns();
-      await writeDesigns(list.filter(x => x.id !== id));
+      const kept = list.filter(x => x.id !== id);
+      await writeDesigns(kept);
       await delTab(imgTab(id));
-      return ok({ deleted: true });
+      return ok({ deleted: true,
+        designs: kept.map(d => ({ id: d.id, name: d.name, lang: d.lang,
+                                  boxes: d.boxes, thumb: d.thumb, active: d.active })) });
     }
 
     if (action === 'saveConfig') {

@@ -93,7 +93,12 @@
   .tb{flex:1;padding:9px;border-radius:10px;border:var(--bw) solid var(--border);background:var(--surface-1);color:var(--muted);font-family:var(--face-latin);font-weight:700;font-size:0.85rem;cursor:pointer;}
   .tb.on{border-color:var(--ac);color:var(--ac);background:var(--accent-wash);}
   .pcard{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
-  .pcard .r{display:grid;grid-template-columns:60px 1fr;gap:8px;margin-bottom:8px;}
+  .pcard .r{display:grid;grid-template-columns:76px 1fr;gap:8px;margin-bottom:8px;}
+  .iconcell{position:relative;}
+  .iconcell input{padding-inline-end:24px;text-align:center;}
+  .iconclear{position:absolute;inset-inline-end:4px;top:50%;transform:translateY(-50%);width:18px;height:18px;line-height:1;
+    border:none;border-radius:50%;background:var(--line-strong);color:var(--txt);font-size:13px;cursor:pointer;padding:0;}
+  .iconclear:hover{background:var(--danger);color:#fff;}
   #editorPanel{display:none;}
 </style>
 </head>
@@ -171,7 +176,7 @@
       <div class="hint">Upload the artwork, then drag each coloured box onto the matching area. The preview on the right is exactly what employees will get.</div>
 
       <div class="two" style="margin-bottom:14px">
-        <div class="fld">Design name<input type="text" id="dName" placeholder="e.g. Thank You Blue" /></div>
+        <div class="fld">Design name <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span><input type="text" id="dName" placeholder="Auto-named if left blank" /></div>
         <div class="fld">Language
           <select id="dLang" onchange="drawPreview()">
             <option value="en">English</option>
@@ -291,13 +296,15 @@ function renderPresetEditor(){
   var rtl=PLANG==='ar'?' dir="rtl"':'';
   document.getElementById('presetEditor').innerHTML=arr.map(function(p,i){
     return '<div class="pcard">'+
-      '<div class="r"><input type="text" value="'+esc(p.icon||'')+'" oninput="upPreset('+i+',\'icon\',this.value)" placeholder="\u2B50">'+
+      '<div class="r"><div class="iconcell"><input type="text" id="pi'+i+'" value="'+esc(p.icon||'')+'" oninput="upPreset('+i+',\'icon\',this.value)" placeholder="none" maxlength="4">'+
+        (p.icon?'<button type="button" class="iconclear" title="Remove icon" onclick="clearIcon('+i+')">&times;</button>':'')+'</div>'+
       '<input type="text" value="'+esc(p.label||'')+'" oninput="upPreset('+i+',\'label\',this.value)" placeholder="Heading shown on the card"'+rtl+'></div>'+
       '<div style="text-align:end;margin-top:8px"><button class="btn-danger" onclick="rmPreset('+i+')">Remove</button></div>'+
       '</div>';
   }).join('')||'<div class="hint">No presets yet.</div>';
 }
 function upPreset(i,k,v){ if(PRESETS[PLANG][i]) PRESETS[PLANG][i][k]=v; }
+function clearIcon(i){ if(PRESETS[PLANG][i]){ PRESETS[PLANG][i].icon=''; renderPresetEditor(); } }
 function rmPreset(i){ PRESETS[PLANG].splice(i,1); renderPresetEditor(); }
 function addPreset(){ PRESETS[PLANG].push({icon:'',label:'',text:''}); renderPresetEditor(); }
 async function savePresets(){
@@ -475,24 +482,38 @@ function drawPreview(){
 async function saveDesign(){
   if(!CUR_IMG){toast('Please upload artwork first');return;}
   var name=document.getElementById('dName').value.trim();
-  if(!name){toast('Please give the design a name');return;}
+  if(!name){                       // optional — fall back to a sensible default
+    var n=DESIGNS.length+1;
+    while(DESIGNS.some(function(x){return x.name==='Design '+n;})) n++;
+    name='Design '+n;
+    document.getElementById('dName').value=name;
+  }
   var btn=document.getElementById('saveBtn');
-  btn.textContent='Saving...'; btn.disabled=true;
+  btn.textContent='Saving\u2026'; btn.disabled=true;
   syncBoxes();
   var d=await api({action:'saveDesign',id:CUR.id||'',name:name,
     lang:document.getElementById('dLang').value,boxes:CUR.boxes,
     thumb:CUR.thumb||'',image:CUR_IMG,active:true});
   btn.textContent='Save design'; btn.disabled=false;
-  if(d.saved){toast('Design saved');closeEditor();showApp();}
-  else toast(d.error||'Save failed');
+  if(d.saved){
+    // server returns the updated list — no need to refetch everything
+    if(d.designs) DESIGNS=d.designs;
+    renderDesignList();
+    closeEditor();
+    toast('Design saved');
+  } else toast(d.error||'Save failed');
 }
 
 async function deleteDesign(){
   if(!CUR||!CUR.id)return;
   if(!confirm('Delete "'+CUR.name+'" permanently?'))return;
   var d=await api({action:'deleteDesign',id:CUR.id});
-  if(d.deleted){toast('Design deleted');closeEditor();showApp();}
-  else toast(d.error||'Failed');
+  if(d.deleted){
+    if(d.designs) DESIGNS=d.designs;
+    renderDesignList();
+    closeEditor();
+    toast('Design deleted');
+  } else toast(d.error||'Failed');
 }
 
 if(window.loadPreviewFonts) window.loadPreviewFonts().then(drawPreview);
