@@ -137,9 +137,9 @@ async function ensureTabs() {
 
 // ── Config ──
 const DEFAULT_PRESETS_EN = JSON.stringify([
-  { icon: '\u2B50', label: 'Thank You', text: '' },
-  { icon: '\uD83D\uDCA1', label: 'You Inspire Me', text: '' },
-  { icon: '\u2600\uFE0F', label: 'You Made My Day', text: '' }
+  { icon: '\u2B50', label: 'Thank You', text: 'you covered for me during the audit week' },
+  { icon: '\uD83D\uDCA1', label: 'You Inspire Me', text: 'the way you handled the client call' },
+  { icon: '\u2600\uFE0F', label: 'You Made My Day', text: 'you always ask how the team is doing' }
 ]);
 
 const DEFAULT_PRESETS_AR = JSON.stringify([

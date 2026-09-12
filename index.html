@@ -97,7 +97,6 @@
   html[dir=rtl] .preset .t{font:700 14px/1.4 var(--face-ar);}
   html[dir=rtl] .preset .d{font:400 13px/1.7 var(--face-ar);}
   @media (hover:hover){.preset:hover{border-color:var(--line-strong);}}
-  .preset.on{border-color:var(--accent);background:var(--accent-wash);}
   .preset:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--shadow-ring);}
 
   /* buttons */
@@ -159,20 +158,19 @@
   .tn:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--shadow-ring);}
   .strip-meta{font:400 11px/1.4 var(--face-latin);color:var(--txt-3);margin-top:7px;}
   html[dir=rtl] .strip-meta{font-family:var(--face-ar);}
-  .preset{display:block;width:100%;background:var(--surface-1);border:var(--bw) solid var(--line);border-radius:var(--r-md);padding:var(--sp-3) 14px;cursor:pointer;text-align:start;font-family:inherit;transition:border-color .15s ease,background-color .15s ease;}
+  .preset{display:block;width:100%;cursor:default;background:var(--surface-1);border:var(--bw) solid var(--line);border-radius:var(--r-md);padding:var(--sp-3) 14px;cursor:pointer;text-align:start;font-family:inherit;transition:border-color .15s ease,background-color .15s ease;}
   .preset .t{font:600 14px/1.25 var(--face-latin);color:var(--txt);}
   html[dir=rtl] .preset .t{font:700 15px/1.4 var(--face-ar);}
-  .preset .hintline{display:block;margin-top:4px;font:400 12.5px var(--face-latin);color:var(--txt-3);}
+  .preset .ex{margin-top:5px;font:400 12.5px/1.5 var(--face-latin);color:var(--txt-3);font-style:italic;}
+  html[dir=rtl] .preset .ex{font-family:var(--face-ar);font-style:normal;}
+  .preset.filled{border-color:var(--line-strong);}
+  .preset .hintline{display:none;margin-top:4px;font:400 12.5px var(--face-latin);color:var(--txt-3);}
   html[dir=rtl] .preset .hintline{font-family:var(--face-ar);}
-  .preset.on{border-color:var(--accent);background:var(--accent-wash);}
-  .preset.on .hintline{display:none;}
   .preset:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--shadow-ring);}
-  .preset .body{display:none;width:100%;margin-top:10px;background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--r-sm);padding:11px 13px;color:var(--txt);font:400 16px/1.55 var(--face-latin);outline:none;resize:vertical;min-height:82px;}
+  .preset .body{display:block;width:100%;margin-top:10px;background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--r-sm);padding:11px 13px;color:var(--txt);font:400 16px/1.55 var(--face-latin);outline:none;resize:vertical;min-height:82px;}
   html[dir=rtl] .preset .body{font:400 16px/1.7 var(--face-ar);}
-  .preset.on .body{display:block;}
   .preset .body:focus{border-color:var(--line-strong);}
-  .preset .count{display:none;margin-top:6px;font:400 11px var(--face-latin);color:var(--txt-3);text-align:end;}
-  .preset.on .count{display:block;}
+  .preset .count{display:block;margin-top:6px;font:400 11px var(--face-latin);color:var(--txt-3);text-align:end;}
   .fromhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px;}
   .fromhead label{margin:0;}
   .anonwrap{display:flex;align-items:center;gap:8px;cursor:pointer;}
@@ -296,7 +294,7 @@ var T={
       ios:'<b>iPhone:</b> Press &amp; hold the image above, then tap <b>"Add to Photos"</b>',
       and:'<b>Android:</b> Tap the download button below',
       toPh:'Associate\u2019s name',msgPh:'Write your own words\u2026',fromPh:'Your name',
-      needTo:'Please enter who this card is for.',needMsg:'Pick a message type and write a few words.',wait:'Still loading, please try again in a moment.',
+      needTo:'Please enter who this card is for.',needMsg:'Pick a message type and write a few words.',needAll:'Please fill in all three messages.',exLabel:'e.g.',wait:'Still loading, please try again in a moment.',
       preview:'Preview',live:'updates as you type',anon:'Send anonymously',share:'Share',
       pickHint:'Tap to write your words',designs:function(n){return n+(n===1?' design':' designs');}},
   ar:{choose:'\u0627\u062E\u062A\u0631 \u0628\u0637\u0627\u0642\u0629',details:'\u0631\u0633\u0627\u0644\u062A\u0643',to:'\u0625\u0644\u0649',msg:'\u0627\u0644\u0631\u0633\u0627\u0644\u0629',from:'\u0645\u0646',opt:'(\u0627\u062E\u062A\u064A\u0627\u0631\u064A)',
@@ -304,7 +302,7 @@ var T={
       ios:'<b>\u0622\u064A\u0641\u0648\u0646:</b> \u0627\u0636\u063A\u0637 \u0645\u0637\u0648\u0644\u0627\u064B \u0639\u0644\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u062B\u0645 \u0627\u062E\u062A\u0631 <b>\u0625\u0636\u0627\u0641\u0629 \u0625\u0644\u0649 \u0627\u0644\u0635\u0648\u0631</b>',
       and:'<b>\u0623\u0646\u062F\u0631\u0648\u064A\u062F:</b> \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0632\u0631 \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0628\u0627\u0644\u0623\u0633\u0641\u0644',
       toPh:'\u0627\u0633\u0645 \u0627\u0644\u0632\u0645\u064A\u0644',msgPh:'\u0627\u0643\u062A\u0628 \u0643\u0644\u0645\u0627\u062A\u0643\u2026',fromPh:'\u0627\u0633\u0645\u0643',
-      needTo:'\u0627\u0644\u0631\u062C\u0627\u0621 \u0643\u062A\u0627\u0628\u0629 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0644\u0645.',needMsg:'\u0627\u062E\u062A\u0631 \u0646\u0648\u0639 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0643\u062A\u0628 \u0643\u0644\u0645\u0627\u062A\u0643.',wait:'\u062C\u0627\u0631\u064D \u0627\u0644\u062A\u062D\u0645\u064A\u0644\u060C \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.',
+      needTo:'\u0627\u0644\u0631\u062C\u0627\u0621 \u0643\u062A\u0627\u0628\u0629 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0644\u0645.',needMsg:'\u0627\u062E\u062A\u0631 \u0646\u0648\u0639 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0643\u062A\u0628 \u0643\u0644\u0645\u0627\u062A\u0643.',needAll:'\u0627\u0644\u0631\u062C\u0627\u0621 \u062A\u0639\u0628\u0626\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644 \u0627\u0644\u062B\u0644\u0627\u062B.',exLabel:'\u0645\u062B\u0627\u0644:',wait:'\u062C\u0627\u0631\u064D \u0627\u0644\u062A\u062D\u0645\u064A\u0644\u060C \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.',
       preview:'\u0645\u0639\u0627\u064A\u0646\u0629',live:'\u062A\u062A\u062D\u062F\u0651\u062B \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u0643\u062A\u0627\u0628\u0629',anon:'\u0625\u0631\u0633\u0627\u0644 \u062F\u0648\u0646 \u0627\u0633\u0645',share:'\u0645\u0634\u0627\u0631\u0643\u0629',
       pickHint:'\u0627\u0636\u063A\u0637 \u0644\u0643\u062A\u0627\u0628\u0629 \u0643\u0644\u0645\u0627\u062A\u0643',designs:function(n){return n+' \u062A\u0635\u0645\u064A\u0645';}}
 };
@@ -404,43 +402,37 @@ function renderPresets(){
   var arr=(CFG&&CFG.presets&&CFG.presets[LANG])||[];
   var t=T[LANG];
   document.getElementById('presetList').innerHTML=arr.map(function(p,i){
-    return '<div class="preset" id="ps'+i+'" onclick="usePreset('+i+')">'+
+    var ex=(p.text||'').trim();
+    return '<div class="preset open" id="ps'+i+'">'+
       '<div class="t">'+(p.icon?p.icon+' ':'')+(p.label||'')+'</div>'+
-      '<span class="hintline">'+t.pickHint+'</span>'+
-      '<textarea class="body" id="pb'+i+'" maxlength="300" rows="3" placeholder="'+t.msgPh+'" '+
-        'oninput="onPresetType('+i+')" onclick="event.stopPropagation()"></textarea>'+
-      '<div class="count" id="pc'+i+'">0 / 300</div>'+
+      (ex?'<div class="ex">'+t.exLabel+' '+ex+'</div>':'')+
+      '<textarea class="body" id="pb'+i+'" maxlength="120" rows="2" placeholder="'+t.msgPh+'" '+
+        'oninput="onPresetType('+i+')"></textarea>'+
+      '<div class="count" id="pc'+i+'">0 / 120</div>'+
     '</div>';
   }).join('');
-  if(PRESET_IDX>=0 && PRESET_IDX<arr.length){ var el=document.getElementById('ps'+PRESET_IDX); if(el) el.className='preset on'; }
-}
-
-function usePreset(i){
-  var arr=(CFG&&CFG.presets&&CFG.presets[LANG])||[];
-  if(!arr[i]) return;
-  PRESET_IDX=i;
-  arr.forEach(function(_,j){ var el=document.getElementById('ps'+j); if(el) el.className='preset'+(i===j?' on':''); });
-  clearErr('errMsg');
-  var box=document.getElementById('pb'+i);
-  if(box) setTimeout(function(){box.focus();},60);
-  schedulePreview();
 }
 
 function onPresetType(i){
   var box=document.getElementById('pb'+i);
   var c=document.getElementById('pc'+i);
-  if(c) c.textContent=(box.value.length)+' / 300';
+  if(c) c.textContent=box.value.length+' / 120';
+  var card=document.getElementById('ps'+i);
+  if(card) card.classList.toggle('filled', !!box.value.trim());
   clearErr('errMsg');
   schedulePreview();
 }
 
-function currentHeading(){
+/* every preset is required — returns the filled ones, in order */
+function allMessages(){
   var arr=(CFG&&CFG.presets&&CFG.presets[LANG])||[];
-  return (PRESET_IDX>=0&&arr[PRESET_IDX])?(arr[PRESET_IDX].label||''):'';
+  return arr.map(function(p,i){
+    var b=document.getElementById('pb'+i);
+    return { heading:(p.label||''), text:(b?b.value.trim():'') };
+  });
 }
-function currentBody(){
-  var box=document.getElementById('pb'+PRESET_IDX);
-  return box?box.value.trim():'';
+function missingIndexes(){
+  return allMessages().reduce(function(acc,m,i){ if(!m.text) acc.push(i); return acc; },[]);
 }
 
 async function pickDesign(id){
@@ -470,8 +462,7 @@ function drawPreview(){
   if(!d) return;
   CardRender.render(c, imgReady?tplImg:null, d.boxes, {
     to:document.getElementById('toInput').value,
-    heading:currentHeading(),
-    message:currentBody(),
+    messages:allMessages(),
     from:anonOn()?'':document.getElementById('fromInput').value
   });
 }
@@ -533,35 +524,36 @@ function generateCard(){
   var t=T[LANG];
   var toEl=document.getElementById('toInput');
   var to=toEl.value.trim();
-  var heading=currentHeading();
-  var body=currentBody();
+  var msgs=allMessages();
+  var missing=missingIndexes();
   var from=anonOn()?'':document.getElementById('fromInput').value.trim();
 
   var bad=null;
-  if(!to){ setErr('errTo',t.needTo,toEl); bad=bad||toEl; }
+  if(!to){ setErr('errTo',t.needTo,toEl); bad=toEl; }
   else clearErr('errTo',toEl);
-  if(PRESET_IDX<0 || !body){
-    setErr('errMsg',t.needMsg,null);
-    var pel=document.getElementById('ps'+(PRESET_IDX<0?0:PRESET_IDX));
-    if(pel) pel.classList.add('invalid');
-    bad=bad||document.getElementById('pb'+(PRESET_IDX<0?0:PRESET_IDX))||pel;
-  } else clearErr('errMsg');
-  if(bad){ bad.scrollIntoView({behavior:'smooth',block:'center'}); if(bad.focus) bad.focus({preventScroll:true}); return; }
 
+  msgs.forEach(function(_,i){
+    var card=document.getElementById('ps'+i);
+    if(card) card.classList.toggle('invalid', missing.indexOf(i)>=0);
+  });
+  if(missing.length){
+    setErr('errMsg', t.needAll, null);
+    if(!bad) bad=document.getElementById('pb'+missing[0]);
+  } else clearErr('errMsg');
+
+  if(bad){ bad.scrollIntoView({behavior:'smooth',block:'center'}); if(bad.focus) bad.focus({preventScroll:true}); return; }
   if(!fontsReady||!imgReady||!SELECTED){alert(t.wait);return;}
 
   var d=DESIGN_CACHE[SELECTED];
   var canvas=document.getElementById('cardCanvas');
-  CardRender.render(canvas,tplImg,d.boxes,{to:to,heading:heading,message:body,from:from});
+  CardRender.render(canvas,tplImg,d.boxes,{to:to,messages:msgs,from:from});
 
   var url=canvas.toDataURL('image/png');
   document.getElementById('resultImg').src=url;
   var a=document.getElementById('dl');
-  a.href=url;
-  a.download='gratitude-card.png';
+  a.href=url; a.download='gratitude-card.png';
   a.style.display=isIOS?'none':'block';
 
-  // prepare a File for the native share sheet
   LAST_BLOB=null;
   document.getElementById('btnShare').hidden=true;
   if(canvas.toBlob){
@@ -570,9 +562,7 @@ function generateCard(){
       LAST_BLOB=blob;
       try{
         var f=new File([blob],'gratitude-card.png',{type:'image/png'});
-        if(navigator.canShare&&navigator.canShare({files:[f]})){
-          document.getElementById('btnShare').hidden=false;
-        }
+        if(navigator.canShare&&navigator.canShare({files:[f]})) document.getElementById('btnShare').hidden=false;
       }catch(e){}
     },'image/png');
   }
@@ -583,8 +573,8 @@ function generateCard(){
   document.getElementById('langbar').style.display='none';
   window.scrollTo({top:0,behavior:'smooth'});
 
-  // save first — analytics must never be able to block it
-  api({action:'saveCard',to:to,heading:heading,message:body,from:from,
+  var combined=msgs.map(function(m){return m.heading+': '+m.text;}).join('\n');
+  api({action:'saveCard',to:to,message:combined,messages:msgs,from:from,
        lang:LANG,designId:SELECTED,device:isIOS?'iPhone':'Android'});
   try{ if(window.gtag) gtag('event','generate_card',{lang:LANG,design:SELECTED}); }catch(e){}
 }

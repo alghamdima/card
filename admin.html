@@ -46,6 +46,7 @@
   #login h1{color:var(--ac);font-size:1.35rem;font-weight:900;}
   #login p{color:var(--muted);font-size:0.85rem;margin-top:-8px;}
   .lbox{width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;}
+  input[type=color]{width:100%;height:40px;padding:3px;background:rgba(255,255,255,0.08);border:var(--bw) solid var(--border);border-radius:10px;cursor:pointer;}
   input[type=password],input[type=text],input[type=number],textarea,select{background:var(--surface-1);border:var(--bw) solid var(--border);border-radius:10px;padding:12px 14px;color:var(--txt);font-size:15px;font-family:var(--face-latin);outline:none;width:100%;}
   input:focus,textarea:focus,select:focus{border-color:var(--ac);}
   select option{background:var(--bg);}
@@ -152,7 +153,7 @@
 
     <div class="panel">
       <h2>Message Presets</h2>
-      <div class="hint">Each preset is a message type. Its heading is printed on the card, and the employee writes their own words underneath it.</div>
+      <div class="hint">Each preset is a message type. Its heading is printed on the card before the words the associate writes. All three must be filled in.</div>
       <div class="tabs">
         <button class="tb on" id="pt-en" onclick="switchPreset('en')">English</button>
         <button class="tb" id="pt-ar" onclick="switchPreset('ar')">&#x0627;&#x0644;&#x0639;&#x0631;&#x0628;&#x064A;&#x0629;</button>
@@ -206,8 +207,9 @@
 
       <div class="three" style="margin-top:16px">
         <div class="fld">Sample "To"<input type="text" id="sTo" value="Sarah" oninput="drawPreview()" /></div>
-        <div class="fld">Sample heading<input type="text" id="sHead" value="Thank You" oninput="drawPreview()" /></div>
-        <div class="fld">Sample message<input type="text" id="sMsg" value="You saved me on the Q3 report and stayed late three nights running." oninput="drawPreview()" /></div>
+        <div class="fld">Sample message 1<input type="text" id="sM1" value="You saved me on the Q3 report." oninput="drawPreview()" /></div>
+        <div class="fld">Sample message 2<input type="text" id="sM2" value="Your vision keeps the team moving." oninput="drawPreview()" /></div>
+        <div class="fld">Sample message 3<input type="text" id="sM3" value="You bring energy to every stand-up." oninput="drawPreview()" /></div>
         <div class="fld">Sample "From"<input type="text" id="sFrom" value="Ahmed" oninput="drawPreview()" /></div>
       </div>
 
@@ -299,6 +301,7 @@ function renderPresetEditor(){
       '<div class="r"><div class="iconcell"><input type="text" id="pi'+i+'" value="'+esc(p.icon||'')+'" oninput="upPreset('+i+',\'icon\',this.value)" placeholder="none" maxlength="4">'+
         (p.icon?'<button type="button" class="iconclear" title="Remove icon" onclick="clearIcon('+i+')">&times;</button>':'')+'</div>'+
       '<input type="text" value="'+esc(p.label||'')+'" oninput="upPreset('+i+',\'label\',this.value)" placeholder="Heading shown on the card"'+rtl+'></div>'+
+      '<input type="text" value="'+esc(p.text||'')+'" oninput="upPreset('+i+',\'text\',this.value)" placeholder="Example shown to guide the writer"'+rtl+'>'+
       '<div style="text-align:end;margin-top:8px"><button class="btn-danger" onclick="rmPreset('+i+')">Remove</button></div>'+
       '</div>';
   }).join('')||'<div class="hint">No presets yet.</div>';
@@ -361,14 +364,23 @@ function closeEditor(){document.getElementById('editorPanel').style.display='non
 function renderBoxStyles(){
   document.getElementById('boxStyles').innerHTML=KEYS.map(function(k){
     var b=CUR.boxes[k]||{};
-    return '<div class="pcard"><div style="font-weight:800;font-size:0.8rem;margin-bottom:8px;text-transform:uppercase">'+k+'</div>'+
-      '<div class="three">'+
-      '<div class="fld">Max size<input type="number" value="'+(b.size||40)+'" oninput="upBox(\''+k+'\',\'size\',+this.value)"></div>'+
-      '<div class="fld">Colour<input type="text" value="'+(b.color||'#FFFFFF')+'" oninput="upBox(\''+k+'\',\'color\',this.value)" placeholder="#FFFFFF"></div>'+
-      '<div class="fld">Weight<select onchange="upBox(\''+k+'\',\'weight\',this.value)">'+
-        '<option value="bold"'+(b.weight!=='regular'?' selected':'')+'>Bold</option>'+
-        '<option value="regular"'+(b.weight==='regular'?' selected':'')+'>Regular</option>'+
-      '</select></div></div></div>';
+    var inner;
+    if(k==='message'){
+      inner='<div class="three">'+
+        '<div class="fld">Max size<input type="number" value="'+(b.size||40)+'" oninput="upBox(\''+k+'\',\'size\',+this.value)"></div>'+
+        '<div class="fld">Heading colour<input type="color" value="'+(b.headColor||'#F0A868')+'" oninput="upBox(\''+k+'\',\'headColor\',this.value)"></div>'+
+        '<div class="fld">Text colour<input type="color" value="'+(b.bodyColor||'#FFFFFF')+'" oninput="upBox(\''+k+'\',\'bodyColor\',this.value)"></div>'+
+      '</div>';
+    } else {
+      inner='<div class="three">'+
+        '<div class="fld">Max size<input type="number" value="'+(b.size||40)+'" oninput="upBox(\''+k+'\',\'size\',+this.value)"></div>'+
+        '<div class="fld">Colour<input type="color" value="'+(b.color||'#FFFFFF')+'" oninput="upBox(\''+k+'\',\'color\',this.value)"></div>'+
+        '<div class="fld">Weight<select onchange="upBox(\''+k+'\',\'weight\',this.value)">'+
+          '<option value="bold"'+(b.weight!=='regular'?' selected':'')+'>Bold</option>'+
+          '<option value="regular"'+(b.weight==='regular'?' selected':'')+'>Regular</option>'+
+        '</select></div></div>';
+    }
+    return '<div class="pcard"><div style="font-weight:800;font-size:0.8rem;margin-bottom:8px;text-transform:uppercase">'+k+'</div>'+inner+'</div>';
   }).join('');
 }
 function upBox(k,f,v){ if(!CUR.boxes[k])CUR.boxes[k]={}; CUR.boxes[k][f]=v; drawPreview(); }
@@ -471,10 +483,11 @@ document.addEventListener('touchend',function(){drag=null;});
 
 function drawPreview(){
   if(!CUR)return;
+  var labels=(PRESETS[document.getElementById('dLang').value]||PRESETS.en||[]).map(function(p){return p.label||'';});
+  var texts=[document.getElementById('sM1').value,document.getElementById('sM2').value,document.getElementById('sM3').value];
   CardRender.render(document.getElementById('previewCanvas'),tplImg,CUR.boxes,{
     to:document.getElementById('sTo').value,
-    heading:document.getElementById('sHead').value,
-    message:document.getElementById('sMsg').value,
+    messages:texts.map(function(t,i){return {heading:labels[i]||'',text:t};}),
     from:document.getElementById('sFrom').value
   });
 }
