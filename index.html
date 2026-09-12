@@ -340,6 +340,7 @@ function setLang(l){
   document.getElementById('lb-ar').className='langbtn'+(l==='ar'?' on':'');
   PRESET_IDX=-1;
   applyText();
+  if(CFG && CFG.status!=='open') return;
   renderDesigns();
   renderPresets();
   schedulePreview();
@@ -372,6 +373,14 @@ function applyText(){
   document.getElementById('lblSave').textContent=t.save;
   document.getElementById('lblIos').innerHTML=t.ios;
   document.getElementById('lblAnd').innerHTML=t.and;
+
+  // the closed screen has to follow the language too
+  if(CFG && CFG.status && CFG.status!=='open'){
+    document.getElementById('closedTitle').textContent=
+      (LANG==='ar'?x.closedTitleAr:x.closedTitleEn)||(LANG==='ar'?'\u0642\u0631\u064A\u0628\u0627\u064B':'Coming Soon');
+    document.getElementById('closedMsg').textContent=
+      (LANG==='ar'?x.closedMsgAr:x.closedMsgEn)||'';
+  }
 }
 
 function renderDesigns(){
@@ -495,11 +504,7 @@ async function init(){
     document.getElementById('langbar').style.display='flex';
     if(d.status!=='open'){
       applyText();
-      var x=d.text||{};
-      document.getElementById('closedTitle').textContent=(LANG==='ar'?x.closedTitleAr:x.closedTitleEn)||'Coming Soon';
-      document.getElementById('closedMsg').textContent=(LANG==='ar'?x.closedMsgAr:x.closedMsgEn)||'';
       document.getElementById('closedBox').style.display='flex';
-      document.getElementById('pageHeader').style.display='none';
       return;
     }
     DESIGNS=d.designs||[];
