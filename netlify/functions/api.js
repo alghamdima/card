@@ -152,7 +152,7 @@ const DEFAULTS = {
   status: 'open',
   titleEn: 'Gratitude E-Cards',
   titleAr: '\u0628\u0637\u0627\u0642\u0627\u062A \u0627\u0644\u0627\u0645\u062A\u0646\u0627\u0646 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629',
-  subtitleEn: 'Send a note of thanks to a colleague',
+  subtitleEn: 'Send a note of thanks to an associate',
   subtitleAr: '\u0623\u0631\u0633\u0644 \u0643\u0644\u0645\u0629 \u0634\u0643\u0631 \u0644\u0632\u0645\u064A\u0644',
   closedTitleEn: 'Coming Soon',
   closedTitleAr: '\u0642\u0631\u064A\u0628\u0627\u064B',
