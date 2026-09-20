@@ -26,9 +26,6 @@ cards/
 │   └── web/                    # SvelteKit + TypeScript
 │       ├── src/                # components (ui, cards, admin), i18n, messages, routes
 │       └── Dockerfile
-├── infra/
-│   ├── docker-compose.yml
-│   └── nginx/nginx.conf
 ├── scripts/
 │   ├── backup-sqlite.sh
 │   └── restore-sqlite.sh
