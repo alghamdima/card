@@ -49,6 +49,8 @@ type Campaign struct {
 	ID         int64            `json:"id"`
 	Slug       string           `json:"slug"`
 	Title      string           `json:"title"`
+	TitleAR    string           `json:"titleAR,omitempty"`
+	TitleEN    string           `json:"titleEN,omitempty"`
 	Lang       string           `json:"lang"`
 	TextColor  string           `json:"textColor"`
 	HeadColor  string           `json:"headColor"`
@@ -64,6 +66,8 @@ type Campaign struct {
 type CampaignSummary struct {
 	Slug       string    `json:"slug"`
 	Title      string    `json:"title"`
+	TitleAR    string    `json:"titleAR,omitempty"`
+	TitleEN    string    `json:"titleEN,omitempty"`
 	Lang       string    `json:"lang"`
 	TextColor  string    `json:"textColor"`
 	HeadColor  string    `json:"headColor"`

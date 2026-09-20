@@ -92,6 +92,8 @@ func (s *CampaignService) GetCampaignDetails(ctx context.Context, slug string) (
 
 type CreateCampaignInput struct {
 	Title      string                  `json:"title"`
+	TitleAR    string                  `json:"titleAR,omitempty"`
+	TitleEN    string                  `json:"titleEN,omitempty"`
 	Slug       string                  `json:"slug"` // Optional: if empty, will be auto-generated randomly!
 	Lang       string                  `json:"lang"`
 	TextColor  string                  `json:"textColor"`
@@ -106,7 +108,21 @@ type CreateCampaignInput struct {
 func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampaignInput) (*domain.Campaign, error) {
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		return nil, fmt.Errorf("%w: title is required", ErrInvalidCampaignInput)
+		if input.TitleAR != "" {
+			title = strings.TrimSpace(input.TitleAR)
+		} else if input.TitleEN != "" {
+			title = strings.TrimSpace(input.TitleEN)
+		} else {
+			return nil, fmt.Errorf("%w: title is required", ErrInvalidCampaignInput)
+		}
+	}
+	titleAR := strings.TrimSpace(input.TitleAR)
+	if titleAR == "" {
+		titleAR = title
+	}
+	titleEN := strings.TrimSpace(input.TitleEN)
+	if titleEN == "" {
+		titleEN = title
 	}
 	if input.Image == "" && input.TemplateAR == nil {
 		return nil, fmt.Errorf("%w: image is required", ErrInvalidCampaignInput)
@@ -175,6 +191,8 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 	camp := &domain.Campaign{
 		Slug:       slug,
 		Title:      title,
+		TitleAR:    titleAR,
+		TitleEN:    titleEN,
 		Lang:       lang,
 		TextColor:  textColor,
 		HeadColor:  headColor,
@@ -195,6 +213,8 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 
 type UpdateCampaignInput struct {
 	Title      string                  `json:"title"`
+	TitleAR    string                  `json:"titleAR,omitempty"`
+	TitleEN    string                  `json:"titleEN,omitempty"`
 	Lang       string                  `json:"lang"`
 	TextColor  string                  `json:"textColor"`
 	HeadColor  string                  `json:"headColor"`
@@ -217,6 +237,12 @@ func (s *CampaignService) UpdateCampaign(ctx context.Context, slug string, input
 
 	if input.Title != "" {
 		camp.Title = strings.TrimSpace(input.Title)
+	}
+	if input.TitleAR != "" {
+		camp.TitleAR = strings.TrimSpace(input.TitleAR)
+	}
+	if input.TitleEN != "" {
+		camp.TitleEN = strings.TrimSpace(input.TitleEN)
 	}
 	if input.Lang != "" {
 		camp.Lang = input.Lang

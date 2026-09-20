@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Gratitude & Greeting E-Cards",
+    "productName": "Cards",
+    "companyName": "Abdul Latif Jameel Finance",
+    "title": "Cards | ALJUF",
     "subtitle": "Personalize your greeting card and share warm appreciation with colleagues",
     "switchLang": "العربية",
     "loading": "Loading...",
@@ -17,6 +19,11 @@
     "copyLink": "Copy Link",
     "copied": "Link copied successfully! 📋",
     "allRightsReserved": "All Rights Reserved"
+  },
+  "theme": {
+    "dark": "Dark",
+    "light": "Light",
+    "system": "Auto"
   },
   "nav": {
     "home": "Home",

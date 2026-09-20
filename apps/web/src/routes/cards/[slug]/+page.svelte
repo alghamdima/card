@@ -3,12 +3,13 @@
   import { onMount } from 'svelte';
   import { t, locale } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
-  import type { Campaign, TextFieldConfig } from '$lib/types/campaign.types';
+  import type { Campaign } from '$lib/types/campaign.types';
   import CardPreview from '$lib/components/cards/CardPreview.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import LanguageSwitcher from '$lib/components/ui/LanguageSwitcher.svelte';
+  import ThemeSwitcher from '$lib/components/ui/ThemeSwitcher.svelte';
   import { showToast } from '$lib/components/ui/toast.store';
 
   let slug = $derived(page.params.slug);
@@ -16,7 +17,7 @@
   let loading = $state(true);
   let errorMsg = $state('');
 
-  // Selected language for the card: 'ar' or 'en'
+  // Selected language for the card template: 'ar' or 'en'
   let cardLang = $state<'ar' | 'en'>('ar');
 
   // Dynamic field values
@@ -47,13 +48,21 @@
   let activeImage = $derived(activeVariant?.image || campaign?.image || '');
   let activeFields = $derived(activeVariant?.fields || []);
 
+  // Title depending on the selected card language or app locale
+  let displayTitle = $derived.by(() => {
+    if (!campaign) return '';
+    if (cardLang === 'en') {
+      return campaign.titleEN || campaign.title;
+    }
+    return campaign.titleAR || campaign.title;
+  });
+
   async function loadCampaign() {
     if (!slug) return;
     loading = true;
     errorMsg = '';
     try {
       campaign = await campaignsApi.getPublic(slug);
-      // Initialize language from current app language
       let currentAppLocale = 'ar';
       locale.subscribe((l) => (currentAppLocale = l))();
       cardLang = currentAppLocale === 'en' ? 'en' : 'ar';
@@ -104,7 +113,6 @@
       const primaryName = fieldValues['emp_name'] || fieldValues['name'] || toName || '';
       const primaryMsg = fieldValues['job_title'] || fieldValues['title'] || messageText || '';
 
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const device = /iPhone|iPad|iPod/i.test(navigator.userAgent)
         ? 'iPhone'
         : /Android/i.test(navigator.userAgent)
@@ -142,7 +150,7 @@
 </script>
 
 <svelte:head>
-  <title>{campaign ? `${campaign.title} | ${$t('app.title')}` : $t('app.title')}</title>
+  <title>{displayTitle ? `${displayTitle} | ${$t('app.title')}` : $t('app.title')}</title>
 </svelte:head>
 
 <div class="card-page">
@@ -153,12 +161,19 @@
         <span>{$t('app.back')}</span>
       </a>
 
-      <!-- Brand Logo Header in Card Creation -->
-      <div class="brand-badge">
-        <img src="/images/brand/aljuf-ar.png" alt="ALJ Finance" class="aljuf-logo" />
-      </div>
+      <!-- Brand Logo Header in Card Creation - Enlarged & High Quality -->
+      <a href="/" class="brand-link">
+        <img
+          src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
+          alt="Abdul Latif Jameel Finance"
+          class="aljuf-logo"
+        />
+      </a>
 
-      <LanguageSwitcher />
+      <div class="nav-controls">
+        <ThemeSwitcher />
+        <LanguageSwitcher />
+      </div>
     </div>
 
     {#if loading}
@@ -167,7 +182,7 @@
       <ErrorState message={errorMsg} onretry={loadCampaign} />
     {:else if campaign}
       <header class="header">
-        <h1>{campaign.title}</h1>
+        <h1>{displayTitle}</h1>
         <p>{$t('card.livePreview')}</p>
 
         <!-- Template Language Selection Tabs for Employee -->
@@ -261,11 +276,11 @@
           </div>
         </div>
       {:else}
+        <!-- Streamlined Success Card without the annoying save banner -->
         <div class="success-box">
-          <div class="how-to-save">
-            <h3>{$t('card.howToSave')}</h3>
-            <p class="guide-item">📱 {$t('card.iosInstructions')}</p>
-          </div>
+          <div class="success-icon">🎉</div>
+          <h3>{$t('card.successToast')}</h3>
+          <p class="success-hint">تم حفظ البطاقة بنجاح على جهازك بدقة عالية</p>
 
           <Button variant="secondary" onclick={makeAnother}>
             <span>🔄</span>
@@ -282,27 +297,40 @@
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 20px 16px 48px;
+    padding: 24px 16px 48px;
     background: var(--bg-app);
   }
 
   .page-wrap {
     width: 100%;
-    max-width: 500px;
+    max-width: 520px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 22px;
   }
 
   .top-nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
   }
 
-  .brand-badge .aljuf-logo {
-    height: 38px;
+  .brand-link {
+    display: flex;
+    align-items: center;
+  }
+
+  .aljuf-logo {
+    height: 52px;
+    width: auto;
     object-fit: contain;
+  }
+
+  .nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .back-link {
@@ -329,9 +357,10 @@
   }
 
   .header h1 {
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 800;
     color: var(--text-main);
+    letter-spacing: -0.4px;
   }
 
   .header p {
@@ -347,6 +376,7 @@
     border: 1px solid var(--color-border);
     gap: 4px;
     margin-top: 6px;
+    box-shadow: var(--shadow-sm);
   }
 
   .lang-pill {
@@ -375,7 +405,7 @@
     background: var(--surface-1);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
-    padding: 20px;
+    padding: 22px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -431,31 +461,27 @@
     background: var(--surface-1);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
-    padding: 24px 20px;
+    padding: 28px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
+    align-items: center;
     text-align: center;
+    box-shadow: var(--shadow-sm);
   }
 
-  .how-to-save {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: var(--surface-2);
-    padding: 16px;
-    border-radius: var(--radius-md);
+  .success-icon {
+    font-size: 40px;
   }
 
-  .how-to-save h3 {
-    font-size: 15px;
+  .success-box h3 {
+    font-size: 18px;
     font-weight: 800;
     color: var(--text-main);
   }
 
-  .guide-item {
-    font-size: 13px;
+  .success-hint {
+    font-size: 14px;
     color: var(--text-muted);
-    line-height: 1.5;
   }
 </style>

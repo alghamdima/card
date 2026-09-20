@@ -17,7 +17,8 @@
 
   // Create Campaign Modal
   let showCreateModal = $state(false);
-  let newTitle = $state('');
+  let newTitleAR = $state('');
+  let newTitleEN = $state('');
   let newTextColor = $state('#FFFFFF');
   let newHeadColor = $state('#FFCD00');
   let newImageBase64 = $state('');
@@ -26,6 +27,8 @@
   // Template & Position Builder Modal
   let showBuilderModal = $state(false);
   let editingCampaign = $state<Campaign | null>(null);
+  let editingTitleAR = $state('');
+  let editingTitleEN = $state('');
   let activeLangTab = $state<'ar' | 'en'>('ar');
   let activeFieldId = $state<string>('emp_name');
 
@@ -72,7 +75,7 @@
   }
 
   async function handleCreateCampaign() {
-    if (!newTitle.trim()) {
+    if (!newTitleAR.trim() && !newTitleEN.trim()) {
       showToast($t('admin.campaignName') + ' ' + $t('errors.VALIDATION_ERROR'), 'error');
       return;
     }
@@ -116,8 +119,12 @@
         }
       ];
 
+      const mainTitle = newTitleAR.trim() || newTitleEN.trim();
+
       const created = await campaignsApi.create({
-        title: newTitle.trim(),
+        title: mainTitle,
+        titleAR: newTitleAR.trim() || mainTitle,
+        titleEN: newTitleEN.trim() || mainTitle,
         textColor: newTextColor,
         headColor: newHeadColor,
         image: newImageBase64,
@@ -134,7 +141,8 @@
 
       showToast(`${$t('app.save')} (/cards/${created.slug})`, 'success');
       showCreateModal = false;
-      newTitle = '';
+      newTitleAR = '';
+      newTitleEN = '';
       newImageBase64 = '';
       await loadCampaigns();
     } catch (e: any) {
@@ -148,6 +156,8 @@
     try {
       const camp = await campaignsApi.getAdmin(slug);
       editingCampaign = camp;
+      editingTitleAR = camp.titleAR || camp.title || '';
+      editingTitleEN = camp.titleEN || camp.title || '';
       activeLangTab = 'ar';
 
       // Load AR template
@@ -251,6 +261,8 @@
     isSubmitting = true;
     try {
       await campaignsApi.update(editingCampaign.slug, {
+        titleAR: editingTitleAR.trim() || editingCampaign.title,
+        titleEN: editingTitleEN.trim() || editingCampaign.title,
         templateAR: {
           image: arImage,
           fields: arFields
@@ -391,10 +403,17 @@
 >
   <div class="modal-form">
     <Input
-      label={$t('admin.campaignName')}
+      label="اسم المناسبة بالعربية (Arabic Title)"
       placeholder="مثال: تهنئة عيد الفطر المبارك 2026"
-      value={newTitle}
-      oninput={(e) => (newTitle = (e.target as HTMLInputElement).value)}
+      value={newTitleAR}
+      oninput={(e) => (newTitleAR = (e.target as HTMLInputElement).value)}
+    />
+
+    <Input
+      label="اسم المناسبة بالإنجليزية (English Title)"
+      placeholder="e.g. Eid Al-Fitr Greeting 2026"
+      value={newTitleEN}
+      oninput={(e) => (newTitleEN = (e.target as HTMLInputElement).value)}
     />
 
     <div class="upload-section">
@@ -442,6 +461,30 @@
   onclose={() => (showBuilderModal = false)}
 >
   <div class="builder-modal-content">
+    <!-- Campaign Titles in AR & EN -->
+    <div class="titles-bilingual-bar">
+      <div class="title-input-item">
+        <label for="edit_title_ar">عنوان المناسبة (العربية)</label>
+        <input
+          id="edit_title_ar"
+          type="text"
+          bind:value={editingTitleAR}
+          class="mini-input"
+          placeholder="مثال: تهنئة عيد الفطر المبارك"
+        />
+      </div>
+      <div class="title-input-item">
+        <label for="edit_title_en">Occasion Title (English)</label>
+        <input
+          id="edit_title_en"
+          type="text"
+          bind:value={editingTitleEN}
+          class="mini-input"
+          placeholder="e.g. Eid Al-Fitr Greeting"
+        />
+      </div>
+    </div>
+
     <!-- Language Switcher Tabs -->
     <div class="lang-builder-tabs">
       <button
@@ -767,6 +810,28 @@
     max-height: 80vh;
     overflow-y: auto;
     padding: 8px 4px;
+  }
+
+  .titles-bilingual-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    background: var(--surface-1);
+    padding: 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+  }
+
+  .title-input-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .title-input-item label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-muted);
   }
 
   .lang-builder-tabs {

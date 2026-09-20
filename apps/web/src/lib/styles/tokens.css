@@ -58,7 +58,10 @@
   --surface-card: #FFFFFF;
   --text-main: #1E2022;
   --text-muted: #5C6670;
-  --text-dim: #8C5BA6;
-  --color-border: #E5E9EE;
-  --color-border-strong: #D0D7DE;
+  --text-dim: #7F5490;
+  --color-border: #E2E4E9;
+  --color-border-strong: #CDD1D9;
+  --shadow-sm: 0 4px 16px rgba(60, 16, 83, 0.06);
+  --shadow-card: 0 16px 40px rgba(60, 16, 83, 0.10);
+  --ring-focus: rgba(255, 205, 0, 0.45);
 }

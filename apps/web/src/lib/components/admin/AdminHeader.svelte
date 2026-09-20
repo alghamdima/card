@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { t } from '../../i18n';
+  import { t, locale } from '../../i18n';
   import { authStore } from '../../stores/auth.store';
   import LanguageSwitcher from '../ui/LanguageSwitcher.svelte';
+  import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 
   function handleLogout() {
     authStore.logout().then(() => {
@@ -13,8 +14,15 @@
 <header class="admin-header">
   <div class="brand">
     <a href="/admin/dashboard" class="logo">
-      <img src="/images/brand/aljuf-ar.png" alt="ALJ Finance" class="admin-brand-logo" />
-      <span class="name">{$t('admin.title')}</span>
+      <img
+        src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
+        alt="ALJ Finance"
+        class="admin-brand-logo"
+      />
+      <div class="brand-text">
+        <span class="product-name">Cards</span>
+        <span class="name">{$t('admin.title')}</span>
+      </div>
     </a>
   </div>
 
@@ -25,6 +33,7 @@
   </nav>
 
   <div class="actions">
+    <ThemeSwitcher />
     <LanguageSwitcher />
     <button class="logout-btn" onclick={handleLogout}>
       {$t('nav.logout')}
@@ -37,16 +46,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 24px;
+    padding: 16px 28px;
     background: var(--surface-1);
     border-bottom: 1px solid var(--color-border);
     gap: 16px;
+    box-shadow: var(--shadow-sm);
   }
 
   .brand .logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     font-size: 16px;
     font-weight: 800;
     color: var(--text-main);
@@ -54,8 +64,28 @@
   }
 
   .admin-brand-logo {
-    height: 34px;
+    height: 48px;
+    width: auto;
     object-fit: contain;
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .product-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--color-accent);
+    letter-spacing: 0.5px;
+  }
+
+  .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
   }
 
   .nav-links {

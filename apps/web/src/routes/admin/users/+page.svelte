@@ -59,7 +59,6 @@
               <th>{$t('admin.receiver')}</th>
               <th>{$t('card.message')}</th>
               <th>{$t('admin.sender')}</th>
-              <th>{$t('admin.device')}</th>
               <th>{$t('admin.dateAndTime')}</th>
             </tr>
           </thead>
@@ -71,9 +70,8 @@
                   <span class="slug-tag">{card.campaignSlug}</span>
                 </td>
                 <td><strong>{card.to || '-'}</strong></td>
-                <td class="msg-col">{card.message || '-'}</td>
+                <td class="msg-col">{card.message || (card.fieldValues && card.fieldValues['job_title']) || '-'}</td>
                 <td>{card.from || '-'}</td>
-                <td><span class="dev-tag">{card.device}</span></td>
                 <td class="date-col">{card.date} {card.time}</td>
               </tr>
             {/each}

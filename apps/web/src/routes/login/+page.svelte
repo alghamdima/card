@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { t } from '$lib/i18n';
+  import { t, locale } from '$lib/i18n';
   import { authStore, isAuthenticated } from '$lib/stores/auth.store';
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import LanguageSwitcher from '$lib/components/ui/LanguageSwitcher.svelte';
+  import ThemeSwitcher from '$lib/components/ui/ThemeSwitcher.svelte';
 
   let password = $state('');
   let loading = $state(false);
@@ -52,12 +53,21 @@
 <div class="login-page">
   <div class="top-bar">
     <a href="/" class="back-link">← {$t('app.back')}</a>
-    <LanguageSwitcher />
+    <div class="controls-wrap">
+      <ThemeSwitcher />
+      <LanguageSwitcher />
+    </div>
   </div>
 
   <div class="login-card">
     <div class="card-head">
-      <span class="icon">🔒</span>
+      <div class="brand-badge-login">
+        <img
+          src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
+          alt="Abdul Latif Jameel Finance"
+          class="login-brand-logo"
+        />
+      </div>
       <h2>{$t('login.title')}</h2>
       <p>{$t('login.subtitle')}</p>
     </div>
@@ -105,6 +115,12 @@
     align-items: center;
   }
 
+  .controls-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .back-link {
     color: var(--text-muted);
     font-size: 14px;
@@ -117,11 +133,11 @@
 
   .login-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     background: var(--surface-card);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
-    padding: 32px 28px;
+    padding: 36px 30px;
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -130,6 +146,20 @@
 
   .card-head {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brand-badge-login {
+    margin-bottom: 8px;
+  }
+
+  .login-brand-logo {
+    height: 64px;
+    width: auto;
+    object-fit: contain;
   }
 
   .icon {

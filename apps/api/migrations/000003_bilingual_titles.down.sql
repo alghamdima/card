@@ -1,0 +1,2 @@
+-- 000003_bilingual_titles.down.sql
+-- Down migration placeholder

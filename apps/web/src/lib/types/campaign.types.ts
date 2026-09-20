@@ -43,6 +43,8 @@ export interface Campaign {
   id: number;
   slug: string;
   title: string;
+  titleAR?: string;
+  titleEN?: string;
   lang: string;
   textColor: string;
   headColor: string;
@@ -58,6 +60,8 @@ export interface Campaign {
 export interface CampaignSummary {
   slug: string;
   title: string;
+  titleAR?: string;
+  titleEN?: string;
   lang: string;
   textColor: string;
   headColor: string;

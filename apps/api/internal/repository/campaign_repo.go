@@ -29,7 +29,7 @@ func (r *CampaignRepository) ExistsSlug(ctx context.Context, slug string) (bool,
 
 func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
 	query := `
-		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
+		SELECT id, slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
 		FROM campaigns
 		WHERE slug = ? AND active = 1
 	`
@@ -40,7 +40,7 @@ func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (
 	var templateARRaw, templateENRaw sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, slug).Scan(
-		&c.ID, &c.Slug, &c.Title, &c.Lang, &c.TextColor, &c.HeadColor,
+		&c.ID, &c.Slug, &c.Title, &c.TitleAR, &c.TitleEN, &c.Lang, &c.TextColor, &c.HeadColor,
 		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
 	)
 	if err != nil {
@@ -75,7 +75,7 @@ func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (
 
 func (r *CampaignRepository) GetAllPublic(ctx context.Context) ([]domain.CampaignSummary, error) {
 	query := `
-		SELECT c.slug, c.title, c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
+		SELECT c.slug, c.title, COALESCE(c.title_ar, c.title), COALESCE(c.title_en, c.title), c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
 		       COUNT(k.id) as card_count
 		FROM campaigns c
 		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
@@ -94,7 +94,7 @@ func (r *CampaignRepository) GetAllPublic(ctx context.Context) ([]domain.Campaig
 		var s domain.CampaignSummary
 		var createdAtStr string
 		var activeInt int
-		if err := rows.Scan(&s.Slug, &s.Title, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
+		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
 			return nil, err
 		}
 		s.Active = activeInt == 1
@@ -110,7 +110,7 @@ func (r *CampaignRepository) GetAllPublic(ctx context.Context) ([]domain.Campaig
 
 func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.CampaignSummary, error) {
 	query := `
-		SELECT c.slug, c.title, c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
+		SELECT c.slug, c.title, COALESCE(c.title_ar, c.title), COALESCE(c.title_en, c.title), c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
 		       COUNT(k.id) as card_count
 		FROM campaigns c
 		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
@@ -128,7 +128,7 @@ func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.Campaign
 		var s domain.CampaignSummary
 		var createdAtStr string
 		var activeInt int
-		if err := rows.Scan(&s.Slug, &s.Title, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
+		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
 			return nil, err
 		}
 		s.Active = activeInt == 1
@@ -144,7 +144,7 @@ func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.Campaign
 
 func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
 	query := `
-		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
+		SELECT id, slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
 		FROM campaigns
 		WHERE slug = ?
 	`
@@ -155,7 +155,7 @@ func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domai
 	var templateARRaw, templateENRaw sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, slug).Scan(
-		&c.ID, &c.Slug, &c.Title, &c.Lang, &c.TextColor, &c.HeadColor,
+		&c.ID, &c.Slug, &c.Title, &c.TitleAR, &c.TitleEN, &c.Lang, &c.TextColor, &c.HeadColor,
 		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
 	)
 	if err != nil {
@@ -208,9 +208,16 @@ func (r *CampaignRepository) Create(ctx context.Context, c *domain.Campaign) err
 		}
 	}
 
+	if c.TitleAR == "" {
+		c.TitleAR = c.Title
+	}
+	if c.TitleEN == "" {
+		c.TitleEN = c.Title
+	}
+
 	query := `
-		INSERT INTO campaigns (slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO campaigns (slug, title, title_ar, title_en, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	activeInt := 0
 	if c.Active {
@@ -218,7 +225,7 @@ func (r *CampaignRepository) Create(ctx context.Context, c *domain.Campaign) err
 	}
 
 	res, err := r.db.ExecContext(ctx, query,
-		c.Slug, c.Title, c.Lang, c.TextColor, c.HeadColor,
+		c.Slug, c.Title, c.TitleAR, c.TitleEN, c.Lang, c.TextColor, c.HeadColor,
 		string(boxesBytes), c.Image, c.Thumb, templateARStr, templateENStr, activeInt,
 	)
 	if err != nil {
@@ -255,13 +262,20 @@ func (r *CampaignRepository) Update(ctx context.Context, c *domain.Campaign) err
 		}
 	}
 
+	if c.TitleAR == "" {
+		c.TitleAR = c.Title
+	}
+	if c.TitleEN == "" {
+		c.TitleEN = c.Title
+	}
+
 	query := `
 		UPDATE campaigns
-		SET title = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?, image = CASE WHEN ? != '' THEN ? ELSE image END, thumb = CASE WHEN ? != '' THEN ? ELSE thumb END, template_ar = ?, template_en = ?, active = ?
+		SET title = ?, title_ar = ?, title_en = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?, image = CASE WHEN ? != '' THEN ? ELSE image END, thumb = CASE WHEN ? != '' THEN ? ELSE thumb END, template_ar = ?, template_en = ?, active = ?
 		WHERE slug = ?
 	`
 	_, err = r.db.ExecContext(ctx, query,
-		c.Title, c.Lang, c.TextColor, c.HeadColor, string(boxesBytes), c.Image, c.Image, c.Thumb, c.Thumb, templateARStr, templateENStr, activeInt, c.Slug,
+		c.Title, c.TitleAR, c.TitleEN, c.Lang, c.TextColor, c.HeadColor, string(boxesBytes), c.Image, c.Image, c.Thumb, c.Thumb, templateARStr, templateENStr, activeInt, c.Slug,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update campaign: %w", err)
