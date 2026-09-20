@@ -1,9 +1,9 @@
 {
   "app": {
-    "productName": "Cards",
+    "productName": "Occasion Cards",
     "companyName": "Abdul Latif Jameel Finance",
     "title": "Cards | ALJUF",
-    "subtitle": "Personalize your greeting card and share warm appreciation with colleagues",
+    "subtitle": "Create personalized greeting cards and share heartfelt wishes with colleagues",
     "switchLang": "العربية",
     "loading": "Loading...",
     "error": "An unexpected error occurred",
@@ -36,7 +36,7 @@
   },
   "card": {
     "preview": "Card Preview",
-    "livePreview": "Updates automatically as you type",
+    "livePreview": "",
     "to": "To (Recipient's Name)",
     "toPlaceholder": "e.g., Sarah Jenkins",
     "message": "Message / Words of Gratitude",
@@ -77,7 +77,7 @@
     "imageSelected": "Image selected successfully",
     "saveAndPublish": "Save & Generate Link",
     "confirmDelete": "Are you sure you want to permanently delete this occasion and all its cards?",
-    "stats": "Submission Analytics",
+    "stats": "Card Statistics",
     "sender": "From",
     "receiver": "To",
     "dateAndTime": "Date & Time",
@@ -105,8 +105,14 @@
     "fontColor": "Font Color",
     "textAlign": "Text Alignment",
     "saveTemplateAndPosition": "Save Template & Position",
-    "noCardsForCampaign": "No cards have been generated for this occasion yet",
-    "totalCardsGenerated": "TOTAL CARDS GENERATED"
+    "noCardsForCampaign": "No cards generated for this occasion yet",
+    "totalCardsGenerated": "TOTAL CARDS GENERATED",
+    "searchPlaceholder": "Search by name or title...",
+    "fullName": "FULL NAME",
+    "jobTitleDetails": "JOB TITLE / DETAILS",
+    "language": "LANGUAGE",
+    "date": "DATE",
+    "time": "TIME"
   },
   "login": {
     "title": "Admin Sign In",

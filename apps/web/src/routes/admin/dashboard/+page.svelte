@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { t } from '$lib/i18n';
+  import { t, locale } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { CampaignAnalytics, Card } from '$lib/types/campaign.types';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
@@ -99,24 +99,24 @@
     <div class="header-left">
       <div class="title-row">
         <span class="bar-icon">📊</span>
-        <h2>Card Generating Analytics</h2>
+        <h2>{$t('admin.analyticsTitle')}</h2>
       </div>
-      <span class="updated-time">Updated: {lastUpdatedTime}</span>
+      <span class="updated-time">{$locale === 'en' ? 'Updated' : 'آخر تحديث'}: {lastUpdatedTime}</span>
     </div>
 
     <div class="header-actions">
       <button class="btn-round" onclick={loadData} title={$t('admin.refresh')}>
         <span class="btn-icon">🔄</span>
-        <span>Refresh</span>
+        <span>{$t('admin.refresh')}</span>
       </button>
 
       <button class="btn-round" onclick={handleExportCsv} title={$t('admin.exportCsv')}>
         <span class="btn-icon">📥</span>
-        <span>Export CSV</span>
+        <span>{$t('admin.exportCsv')}</span>
       </button>
 
       <a href="/admin/cards" class="btn-round admin-pill">
-        <span>Admin</span>
+        <span>{$t('nav.campaigns')}</span>
       </a>
     </div>
   </header>
@@ -143,12 +143,12 @@
     <div class="stats-section">
       <div class="section-badge-title">
         <span class="icon">📊</span>
-        <span>ALL TIME STATS</span>
+        <span>{$t('admin.allTimeStats')}</span>
       </div>
 
       <div class="stat-card-wide">
         <div class="stat-top-meta">
-          <span class="stat-label">TOTAL CARDS GENERATED</span>
+          <span class="stat-label">{$t('admin.totalCardsGenerated')}</span>
           <span class="card-icon-pill">🎴</span>
         </div>
         <div class="stat-big-number">
@@ -161,21 +161,21 @@
     <div class="employee-list-section">
       <div class="section-badge-title">
         <span class="icon">📋</span>
-        <span>EMPLOYEE LIST</span>
+        <span>{$t('admin.employeeList')}</span>
       </div>
 
       <div class="employee-table-card">
         <div class="table-card-header">
           <div class="header-counter-box">
-            <h4>Employee Cards</h4>
-            <span class="total-badge">{campaignCards.length} total</span>
+            <h4>{$t('admin.employeeCards')}</h4>
+            <span class="total-badge">{campaignCards.length} {$locale === 'en' ? 'total' : 'إجمالي'}</span>
           </div>
 
           <div class="search-box">
             <span class="search-icon">🔍</span>
             <input
               type="text"
-              placeholder="البحث بالاسم أو المسمى..."
+              placeholder={$t('admin.searchPlaceholder')}
               bind:value={searchQuery}
               class="search-input"
             />
@@ -195,11 +195,11 @@
             <table class="analytics-data-table">
               <thead>
                 <tr>
-                  <th>FULL NAME</th>
-                  <th>JOB TITLE / DETAILS</th>
-                  <th>LANGUAGE</th>
-                  <th>DATE</th>
-                  <th>TIME</th>
+                  <th>{$t('admin.fullName')}</th>
+                  <th>{$t('admin.jobTitleDetails')}</th>
+                  <th>{$t('admin.language')}</th>
+                  <th>{$t('admin.date')}</th>
+                  <th>{$t('admin.time')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -333,7 +333,7 @@
   }
 
   .nav-tab-item.active {
-    color: #FFFFFF;
+    color: var(--text-main);
   }
 
   .nav-tab-item.active::after {

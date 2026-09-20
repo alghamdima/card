@@ -63,12 +63,12 @@
     <div class="card-head">
       <div class="brand-badge-login">
         <img
-          src="/images/brand/aljuf-ar-tight.png"
+          src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
           alt="Abdul Latif Jameel Finance"
           class="login-brand-logo light-only"
         />
         <img
-          src="/images/brand/aljuf-ar-white-tight.png"
+          src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
           alt="Abdul Latif Jameel Finance"
           class="login-brand-logo dark-only"
         />

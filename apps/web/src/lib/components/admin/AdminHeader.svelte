@@ -15,12 +15,12 @@
   <div class="brand">
     <a href="/admin/dashboard" class="logo">
       <img
-        src="/images/brand/aljuf-ar-tight.png"
+        src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
         alt="ALJ Finance"
         class="admin-brand-logo light-only"
       />
       <img
-        src="/images/brand/aljuf-ar-white-tight.png"
+        src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
         alt="ALJ Finance"
         class="admin-brand-logo dark-only"
       />

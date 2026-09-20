@@ -45,16 +45,16 @@
     <div class="header-content">
       <div class="brand-row">
         <img
-          src="/images/brand/aljuf-ar-tight.png"
+          src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
           alt="Abdul Latif Jameel Finance"
           class="main-aljuf-logo light-only"
         />
         <img
-          src="/images/brand/aljuf-ar-white-tight.png"
+          src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
           alt="Abdul Latif Jameel Finance"
           class="main-aljuf-logo dark-only"
         />
-        <span class="product-badge">Cards | بطاقات</span>
+        <span class="product-badge">Cards</span>
       </div>
       <h1>{$t('app.productName')}</h1>
       <p>{$t('app.subtitle')}</p>

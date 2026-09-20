@@ -168,12 +168,12 @@
       <div class="header-center">
         <a href="/" class="brand-link" title="Abdul Latif Jameel Finance">
           <img
-            src="/images/brand/aljuf-ar-tight.png"
+            src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
             alt="Abdul Latif Jameel Finance"
             class="aljuf-logo light-only"
           />
           <img
-            src="/images/brand/aljuf-ar-white-tight.png"
+            src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
             alt="Abdul Latif Jameel Finance"
             class="aljuf-logo dark-only"
           />
@@ -196,7 +196,6 @@
     {:else if campaign}
       <section class="occasion-title-box">
         <h1 class="occasion-title">{displayTitle}</h1>
-        <p class="occasion-subtitle">{$t('card.livePreview')}</p>
 
         <!-- Template Language Selection Tabs for Employee -->
         <div class="template-lang-pill-wrap">
