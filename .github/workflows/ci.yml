@@ -1,0 +1,67 @@
+name: CI Checks & Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-api:
+    name: Test Go API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Go Format Check
+        run: |
+          cd apps/api
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: Go Vet
+        run: |
+          cd apps/api
+          go vet ./...
+
+      - name: Run Tests
+        run: |
+          cd apps/api
+          go test -v -race ./...
+
+  build-web:
+    name: Build SvelteKit Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Svelte Check & Type-check
+        run: |
+          cd apps/web
+          npm run check
+
+      - name: Build Web Static Output
+        run: |
+          cd apps/web
+          npm run build
