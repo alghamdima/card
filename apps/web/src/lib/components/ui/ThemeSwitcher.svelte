@@ -13,50 +13,57 @@
 
 <button
   type="button"
-  class="theme-toggle-btn"
+  class="icon-btn theme-toggle-btn"
   onclick={cycleTheme}
-  title={`Theme: ${$theme} (click to toggle)`}
-  aria-label="Toggle light dark theme"
+  title={`الثيم: ${$theme === 'dark' ? 'داكن' : $theme === 'light' ? 'فاتح' : 'تلقائي'} (اضغط للتبديل)`}
+  aria-label="Toggle theme"
 >
   {#if $theme === 'dark'}
-    <span class="icon">🌙</span>
-    <span class="label">{$t('theme.dark') || 'داكن'}</span>
+    <!-- Moon icon -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+    </svg>
   {:else if $theme === 'light'}
-    <span class="icon">☀️</span>
-    <span class="label">{$t('theme.light') || 'فاتح'}</span>
+    <!-- Sun icon -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+    </svg>
   {:else}
-    <span class="icon">💻</span>
-    <span class="label">{$t('theme.system') || 'تلقائي'}</span>
+    <!-- Auto / Monitor icon with dot -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="14" x="2" y="3" rx="2"/>
+      <line x1="8" x2="16" y1="21" y2="21"/>
+      <line x1="12" x2="12" y1="17" y2="21"/>
+      <circle cx="12" cy="10" r="1.5" fill="currentColor"/>
+    </svg>
   {/if}
 </button>
 
 <style>
-  .theme-toggle-btn {
+  .icon-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
     border-radius: var(--radius-full);
-    background: var(--surface-2);
+    background: var(--surface-1);
     border: 1px solid var(--color-border);
-    color: var(--text-main);
-    font-size: 13px;
-    font-weight: 600;
+    color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: var(--shadow-sm);
   }
 
-  .theme-toggle-btn:hover {
-    background: var(--surface-3);
+  .icon-btn:hover {
+    background: var(--surface-2);
     border-color: var(--color-accent);
     color: var(--color-accent);
+    transform: translateY(-1px);
   }
 
-  .icon {
-    font-size: 13.5px;
-  }
-
-  .label {
-    font-size: 12px;
+  .icon-btn:active {
+    transform: translateY(0);
   }
 </style>

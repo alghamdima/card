@@ -45,9 +45,14 @@
     <div class="header-content">
       <div class="brand-row">
         <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
+          src="/images/brand/aljuf-ar-tight.png"
           alt="Abdul Latif Jameel Finance"
-          class="main-aljuf-logo"
+          class="main-aljuf-logo light-only"
+        />
+        <img
+          src="/images/brand/aljuf-ar-white-tight.png"
+          alt="Abdul Latif Jameel Finance"
+          class="main-aljuf-logo dark-only"
         />
         <span class="product-badge">Cards | بطاقات</span>
       </div>
@@ -134,10 +139,28 @@
   }
 
   .main-aljuf-logo {
-    height: 72px;
+    height: 60px;
     width: auto;
     object-fit: contain;
     transition: transform 0.2s ease;
+  }
+
+  :global([data-theme="light"]) .dark-only {
+    display: none !important;
+  }
+
+  :global([data-theme="light"]) .light-only {
+    display: block !important;
+  }
+
+  :global([data-theme="dark"]) .light-only,
+  :global(:root:not([data-theme="light"])) .light-only {
+    display: none !important;
+  }
+
+  :global([data-theme="dark"]) .dark-only,
+  :global(:root:not([data-theme="light"])) .dark-only {
+    display: block !important;
   }
 
   .product-badge {

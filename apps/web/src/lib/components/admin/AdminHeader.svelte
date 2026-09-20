@@ -15,9 +15,14 @@
   <div class="brand">
     <a href="/admin/dashboard" class="logo">
       <img
-        src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
+        src="/images/brand/aljuf-ar-tight.png"
         alt="ALJ Finance"
-        class="admin-brand-logo"
+        class="admin-brand-logo light-only"
+      />
+      <img
+        src="/images/brand/aljuf-ar-white-tight.png"
+        alt="ALJ Finance"
+        class="admin-brand-logo dark-only"
       />
       <div class="brand-text">
         <span class="product-name">Cards</span>
@@ -67,6 +72,24 @@
     height: 48px;
     width: auto;
     object-fit: contain;
+  }
+
+  :global([data-theme="light"]) .dark-only {
+    display: none !important;
+  }
+
+  :global([data-theme="light"]) .light-only {
+    display: block !important;
+  }
+
+  :global([data-theme="dark"]) .light-only,
+  :global(:root:not([data-theme="light"])) .light-only {
+    display: none !important;
+  }
+
+  :global([data-theme="dark"]) .dark-only,
+  :global(:root:not([data-theme="light"])) .dark-only {
+    display: block !important;
   }
 
   .brand-text {

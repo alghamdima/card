@@ -155,35 +155,48 @@
 
 <div class="card-page">
   <div class="page-wrap">
-    <div class="top-nav">
-      <a href="/" class="back-link">
-        <span class="arrow">←</span>
-        <span>{$t('app.back')}</span>
-      </a>
-
-      <!-- Brand Logo Header in Card Creation - Enlarged & High Quality -->
-      <a href="/" class="brand-link">
-        <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en.png' : '/images/brand/aljuf-ar.png'}
-          alt="Abdul Latif Jameel Finance"
-          class="aljuf-logo"
-        />
-      </a>
-
-      <div class="nav-controls">
-        <ThemeSwitcher />
-        <LanguageSwitcher />
+    <header class="card-header-bar">
+      <!-- Start: Back to Home -->
+      <div class="header-side start">
+        <a href="/" class="back-link" title={$t('app.back')}>
+          <span class="arrow">←</span>
+          <span class="back-text">{$t('app.back')}</span>
+        </a>
       </div>
-    </div>
+
+      <!-- Center: Clean Brand Identity -->
+      <div class="header-center">
+        <a href="/" class="brand-link" title="Abdul Latif Jameel Finance">
+          <img
+            src="/images/brand/aljuf-ar-tight.png"
+            alt="Abdul Latif Jameel Finance"
+            class="aljuf-logo light-only"
+          />
+          <img
+            src="/images/brand/aljuf-ar-white-tight.png"
+            alt="Abdul Latif Jameel Finance"
+            class="aljuf-logo dark-only"
+          />
+        </a>
+      </div>
+
+      <!-- End: Minimal Controls -->
+      <div class="header-side end">
+        <div class="nav-controls">
+          <ThemeSwitcher />
+          <LanguageSwitcher />
+        </div>
+      </div>
+    </header>
 
     {#if loading}
       <LoadingState />
     {:else if errorMsg}
       <ErrorState message={errorMsg} onretry={loadCampaign} />
     {:else if campaign}
-      <header class="header">
-        <h1>{displayTitle}</h1>
-        <p>{$t('card.livePreview')}</p>
+      <section class="occasion-title-box">
+        <h1 class="occasion-title">{displayTitle}</h1>
+        <p class="occasion-subtitle">{$t('card.livePreview')}</p>
 
         <!-- Template Language Selection Tabs for Employee -->
         <div class="template-lang-pill-wrap">
@@ -192,17 +205,17 @@
             class:selected={cardLang === 'ar'}
             onclick={() => handleCardLangChange('ar')}
           >
-            🇸🇦 العربية
+            العربية
           </button>
           <button
             class="lang-pill"
             class:selected={cardLang === 'en'}
             onclick={() => handleCardLangChange('en')}
           >
-            🇬🇧 English
+            English
           </button>
         </div>
-      </header>
+      </section>
 
       <div class="card-box">
         <CardPreview
@@ -297,7 +310,7 @@
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 24px 16px 48px;
+    padding: 24px 16px 56px;
     background: var(--bg-app);
   }
 
@@ -306,25 +319,69 @@
     max-width: 520px;
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 20px;
   }
 
-  .top-nav {
-    display: flex;
-    justify-content: space-between;
+  /* Redesigned 3-column header bar */
+  .card-header-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 12px;
+    width: 100%;
+    padding: 4px 0 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .header-side.start {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .header-side.end {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .header-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 
   .brand-link {
     display: flex;
     align-items: center;
+    justify-content: center;
+    text-decoration: none;
   }
 
   .aljuf-logo {
-    height: 52px;
+    height: 48px;
     width: auto;
     object-fit: contain;
+    transition: transform 0.2s ease;
+  }
+
+  .brand-link:hover .aljuf-logo {
+    transform: scale(1.03);
+  }
+
+  :global([data-theme="light"]) .dark-only {
+    display: none !important;
+  }
+
+  :global([data-theme="light"]) .light-only {
+    display: block !important;
+  }
+
+  :global([data-theme="dark"]) .light-only,
+  :global(:root:not([data-theme="light"])) .light-only {
+    display: none !important;
+  }
+
+  :global([data-theme="dark"]) .dark-only,
+  :global(:root:not([data-theme="light"])) .dark-only {
+    display: block !important;
   }
 
   .nav-controls {
@@ -334,37 +391,59 @@
   }
 
   .back-link {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 600;
-    transition: color 0.15s;
+    font-size: 13.5px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    background: var(--surface-1);
+    border: 1px solid var(--color-border);
+    transition: all 0.2s ease;
     text-decoration: none;
   }
 
   .back-link:hover {
     color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: var(--surface-2);
   }
 
-  .header {
+  .arrow {
+    font-size: 14px;
+    transition: transform 0.2s ease;
+  }
+
+  .back-link:hover .arrow {
+    transform: translateX(-2px);
+  }
+
+  :global([dir="rtl"]) .back-link:hover .arrow {
+    transform: translateX(2px);
+  }
+
+  /* Occasion Title & Language Switcher Block */
+  .occasion-title-box {
     text-align: center;
     display: flex;
     flex-direction: column;
     gap: 8px;
     align-items: center;
+    padding: 8px 0;
   }
 
-  .header h1 {
+  .occasion-title {
     font-size: 26px;
     font-weight: 800;
     color: var(--text-main);
     letter-spacing: -0.4px;
+    line-height: 1.3;
   }
 
-  .header p {
-    font-size: 14px;
+  .occasion-subtitle {
+    font-size: 13.5px;
     color: var(--text-dim);
   }
 
@@ -375,12 +454,12 @@
     border-radius: var(--radius-full);
     border: 1px solid var(--color-border);
     gap: 4px;
-    margin-top: 6px;
+    margin-top: 10px;
     box-shadow: var(--shadow-sm);
   }
 
   .lang-pill {
-    padding: 6px 18px;
+    padding: 6px 20px;
     border: none;
     background: transparent;
     border-radius: var(--radius-full);
@@ -388,13 +467,17 @@
     font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .lang-pill.selected {
     background: var(--color-primary);
     color: var(--color-accent);
-    box-shadow: 0 2px 8px rgba(60, 16, 83, 0.4);
+    box-shadow: 0 2px 10px rgba(60, 16, 83, 0.35);
+  }
+
+  .lang-pill:not(.selected):hover {
+    color: var(--text-main);
   }
 
   .card-box {
