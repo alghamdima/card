@@ -54,7 +54,6 @@
           alt="Abdul Latif Jameel Finance"
           class="main-aljuf-logo dark-only"
         />
-        <span class="product-badge">Cards</span>
       </div>
       <h1>{$t('app.productName')}</h1>
       <p>{$t('app.subtitle')}</p>
@@ -161,17 +160,6 @@
   :global([data-theme="dark"]) .dark-only,
   :global(:root:not([data-theme="light"])) .dark-only {
     display: block !important;
-  }
-
-  .product-badge {
-    padding: 4px 12px;
-    background: var(--surface-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    font-size: 12.5px;
-    font-weight: 700;
-    color: var(--color-accent);
-    letter-spacing: 0.5px;
   }
 
   .controls-wrap {

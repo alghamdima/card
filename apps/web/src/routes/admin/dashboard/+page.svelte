@@ -114,10 +114,6 @@
         <span class="btn-icon">📥</span>
         <span>{$t('admin.exportCsv')}</span>
       </button>
-
-      <a href="/admin/cards" class="btn-round admin-pill">
-        <span>{$t('nav.campaigns')}</span>
-      </a>
     </div>
   </header>
 

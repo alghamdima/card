@@ -24,10 +24,6 @@
         alt="ALJ Finance"
         class="admin-brand-logo dark-only"
       />
-      <div class="brand-text">
-        <span class="product-name">Cards</span>
-        <span class="name">{$t('admin.title')}</span>
-      </div>
     </a>
   </div>
 
@@ -90,25 +86,6 @@
   :global([data-theme="dark"]) .dark-only,
   :global(:root:not([data-theme="light"])) .dark-only {
     display: block !important;
-  }
-
-  .brand-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .product-name {
-    font-size: 15px;
-    font-weight: 800;
-    color: var(--color-accent);
-    letter-spacing: 0.5px;
-  }
-
-  .name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-muted);
   }
 
   .nav-links {
