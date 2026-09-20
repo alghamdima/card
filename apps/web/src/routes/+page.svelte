@@ -37,33 +37,40 @@
 </script>
 
 <svelte:head>
-  <title>{$t('app.title')}</title>
+  <title>{$t('app.productName')} | {$t('app.title')}</title>
 </svelte:head>
 
 <div class="page-container">
-  <header class="top-header">
-    <div class="header-content">
-      <div class="brand-row">
+  <!-- Minimal Top Navigation Bar -->
+  <header class="top-nav-bar">
+    <div class="brand-group">
+      <a href="/" class="brand-link" title="Abdul Latif Jameel Finance">
         <img
           src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
           alt="Abdul Latif Jameel Finance"
-          class="main-aljuf-logo light-only"
+          class="aljuf-brand-logo light-only"
         />
         <img
           src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
           alt="Abdul Latif Jameel Finance"
-          class="main-aljuf-logo dark-only"
+          class="aljuf-brand-logo dark-only"
         />
-      </div>
-      <h1>{$t('app.productName')}</h1>
-      <p>{$t('app.subtitle')}</p>
+      </a>
     </div>
-    <div class="controls-wrap">
+
+    <div class="controls-group">
       <ThemeSwitcher />
       <LanguageSwitcher />
     </div>
   </header>
 
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <h1 class="hero-title">{$t('app.productName')}</h1>
+    <p class="hero-subtitle">{$t('app.subtitle')}</p>
+  </section>
+
+  <!-- Occasions Grid -->
   <main class="main-content">
     {#if loading}
       <LoadingState />
@@ -80,15 +87,22 @@
         {#each campaigns as camp (camp.slug)}
           <a href="/cards/{camp.slug}" class="campaign-card">
             {#if camp.thumb}
-              <div class="card-thumb">
+              <div class="card-thumb-wrap">
                 <img src={camp.thumb} alt={getCampaignTitle(camp, $locale)} loading="lazy" />
+                <div class="card-overlay">
+                  <span class="preview-action-chip">
+                    {$locale === 'en' ? 'Create Card →' : 'صمم بطاقتك ←'}
+                  </span>
+                </div>
               </div>
             {/if}
             <div class="card-body">
               <h3 class="camp-title">{getCampaignTitle(camp, $locale)}</h3>
-              <div class="card-meta">
-                <span class="badge">{$t('app.active')}</span>
-                <span class="total-cards">{camp.totalCards} {$t('admin.cardsCount')}</span>
+              <div class="card-footer-meta">
+                <span class="status-indicator">
+                  <span class="status-dot"></span>
+                  {$t('app.active')}
+                </span>
               </div>
             </div>
           </a>
@@ -97,6 +111,7 @@
     {/if}
   </main>
 
+  <!-- Clean Footer -->
   <footer class="page-footer">
     <div class="footer-inner">
       <p>Abdul Latif Jameel Finance &middot; {$t('app.allRightsReserved')} 2026</p>
@@ -107,41 +122,50 @@
 
 <style>
   .page-container {
-    max-width: 960px;
+    max-width: 1040px;
     margin: 0 auto;
-    padding: 36px 20px 48px;
+    padding: 24px 20px 48px;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
   }
 
-  .top-header {
+  /* Clean Top Nav */
+  .top-nav-bar {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 40px;
-    gap: 20px;
-    flex-wrap: wrap;
+    align-items: center;
+    padding: 12px 0 20px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 32px;
   }
 
-  .header-content {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .brand-row {
+  .brand-group {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-bottom: 6px;
   }
 
-  .main-aljuf-logo {
-    height: 60px;
+  .brand-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+
+  .aljuf-brand-logo {
+    height: 48px;
     width: auto;
     object-fit: contain;
     transition: transform 0.2s ease;
+  }
+
+  .brand-link:hover .aljuf-brand-logo {
+    transform: scale(1.02);
+  }
+
+  .controls-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   :global([data-theme="light"]) .dark-only {
@@ -162,23 +186,29 @@
     display: block !important;
   }
 
-  .controls-wrap {
+  /* Hero Section */
+  .hero-section {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
+    text-align: center;
+    gap: 8px;
+    margin-bottom: 36px;
+    padding: 8px 0;
   }
 
-  h1 {
-    font-size: 28px;
+  .hero-title {
+    font-size: 24px;
     font-weight: 800;
     color: var(--text-main);
-    letter-spacing: -0.5px;
+    letter-spacing: -0.3px;
+    margin: 0;
   }
 
-  p {
-    font-size: 15px;
+  .hero-subtitle {
+    font-size: 14.5px;
     color: var(--text-muted);
-    max-width: 540px;
+    margin: 0;
     line-height: 1.5;
   }
 
@@ -186,9 +216,10 @@
     flex: 1;
   }
 
+  /* Occasion Cards Grid */
   .campaign-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
     gap: 24px;
   }
 
@@ -197,10 +228,12 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
     overflow: hidden;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-sm);
+    text-decoration: none;
+    position: relative;
   }
 
   .campaign-card:hover {
@@ -209,21 +242,54 @@
     box-shadow: var(--shadow-card);
   }
 
-  .card-thumb {
+  .card-thumb-wrap {
     width: 100%;
     aspect-ratio: 16 / 10;
     overflow: hidden;
     background: var(--surface-2);
+    position: relative;
   }
 
-  .card-thumb img {
+  .card-thumb-wrap img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.35s ease;
+  }
+
+  .campaign-card:hover .card-thumb-wrap img {
+    transform: scale(1.04);
+  }
+
+  .card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, transparent 60%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 14px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .campaign-card:hover .card-overlay {
+    opacity: 1;
+  }
+
+  .preview-action-chip {
+    padding: 5px 12px;
+    background: var(--surface-1);
+    color: var(--text-main);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--color-border);
   }
 
   .card-body {
-    padding: 20px;
+    padding: 18px 20px 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -233,34 +299,41 @@
 
   .camp-title {
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-main);
-    line-height: 1.4;
+    line-height: 1.35;
+    margin: 0;
   }
 
-  .card-meta {
+  .card-footer-meta {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    padding-top: 4px;
   }
 
-  .badge {
-    padding: 3px 8px;
-    background: var(--color-success-wash);
-    color: var(--color-success);
-    border-radius: var(--radius-full);
-    font-size: 11.5px;
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     font-weight: 700;
+    color: var(--color-success);
+    background: var(--color-success-wash);
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
   }
 
-  .total-cards {
-    font-size: 12.5px;
-    color: var(--text-dim);
-    font-weight: 600;
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
   }
 
+  /* Footer */
   .page-footer {
-    margin-top: 48px;
+    margin-top: 56px;
     padding-top: 24px;
     border-top: 1px solid var(--color-border);
   }
@@ -271,12 +344,15 @@
     align-items: center;
     font-size: 13px;
     color: var(--text-dim);
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .admin-link {
     color: var(--text-muted);
     font-weight: 600;
     transition: color 0.15s ease;
+    text-decoration: none;
   }
 
   .admin-link:hover {
