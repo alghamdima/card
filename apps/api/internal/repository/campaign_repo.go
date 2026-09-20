@@ -29,7 +29,7 @@ func (r *CampaignRepository) ExistsSlug(ctx context.Context, slug string) (bool,
 
 func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
 	query := `
-		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, active, created_at
+		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
 		FROM campaigns
 		WHERE slug = ? AND active = 1
 	`
@@ -37,10 +37,11 @@ func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (
 	var boxesRaw string
 	var createdAtStr string
 	var activeInt int
+	var templateARRaw, templateENRaw sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, slug).Scan(
 		&c.ID, &c.Slug, &c.Title, &c.Lang, &c.TextColor, &c.HeadColor,
-		&boxesRaw, &c.Image, &c.Thumb, &activeInt, &createdAtStr,
+		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -56,6 +57,18 @@ func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (
 	}
 
 	_ = json.Unmarshal([]byte(boxesRaw), &c.Boxes)
+	if templateARRaw.Valid && templateARRaw.String != "" {
+		var tar domain.TemplateVariant
+		if err := json.Unmarshal([]byte(templateARRaw.String), &tar); err == nil {
+			c.TemplateAR = &tar
+		}
+	}
+	if templateENRaw.Valid && templateENRaw.String != "" {
+		var ten domain.TemplateVariant
+		if err := json.Unmarshal([]byte(templateENRaw.String), &ten); err == nil {
+			c.TemplateEN = &ten
+		}
+	}
 
 	return &c, nil
 }
@@ -131,7 +144,7 @@ func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.Campaign
 
 func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
 	query := `
-		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, active, created_at
+		SELECT id, slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
 		FROM campaigns
 		WHERE slug = ?
 	`
@@ -139,10 +152,11 @@ func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domai
 	var boxesRaw string
 	var createdAtStr string
 	var activeInt int
+	var templateARRaw, templateENRaw sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, slug).Scan(
 		&c.ID, &c.Slug, &c.Title, &c.Lang, &c.TextColor, &c.HeadColor,
-		&boxesRaw, &c.Image, &c.Thumb, &activeInt, &createdAtStr,
+		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -158,6 +172,18 @@ func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domai
 	}
 
 	_ = json.Unmarshal([]byte(boxesRaw), &c.Boxes)
+	if templateARRaw.Valid && templateARRaw.String != "" {
+		var tar domain.TemplateVariant
+		if err := json.Unmarshal([]byte(templateARRaw.String), &tar); err == nil {
+			c.TemplateAR = &tar
+		}
+	}
+	if templateENRaw.Valid && templateENRaw.String != "" {
+		var ten domain.TemplateVariant
+		if err := json.Unmarshal([]byte(templateENRaw.String), &ten); err == nil {
+			c.TemplateEN = &ten
+		}
+	}
 
 	return &c, nil
 }
@@ -168,9 +194,23 @@ func (r *CampaignRepository) Create(ctx context.Context, c *domain.Campaign) err
 		return fmt.Errorf("failed to marshal boxes: %w", err)
 	}
 
+	var templateARStr, templateENStr sql.NullString
+	if c.TemplateAR != nil {
+		b, err := json.Marshal(c.TemplateAR)
+		if err == nil {
+			templateARStr = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+	if c.TemplateEN != nil {
+		b, err := json.Marshal(c.TemplateEN)
+		if err == nil {
+			templateENStr = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+
 	query := `
-		INSERT INTO campaigns (slug, title, lang, text_color, head_color, boxes, image, thumb, active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO campaigns (slug, title, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	activeInt := 0
 	if c.Active {
@@ -179,7 +219,7 @@ func (r *CampaignRepository) Create(ctx context.Context, c *domain.Campaign) err
 
 	res, err := r.db.ExecContext(ctx, query,
 		c.Slug, c.Title, c.Lang, c.TextColor, c.HeadColor,
-		string(boxesBytes), c.Image, c.Thumb, activeInt,
+		string(boxesBytes), c.Image, c.Thumb, templateARStr, templateENStr, activeInt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert campaign: %w", err)
@@ -201,13 +241,27 @@ func (r *CampaignRepository) Update(ctx context.Context, c *domain.Campaign) err
 		activeInt = 1
 	}
 
+	var templateARStr, templateENStr sql.NullString
+	if c.TemplateAR != nil {
+		b, err := json.Marshal(c.TemplateAR)
+		if err == nil {
+			templateARStr = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+	if c.TemplateEN != nil {
+		b, err := json.Marshal(c.TemplateEN)
+		if err == nil {
+			templateENStr = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+
 	query := `
 		UPDATE campaigns
-		SET title = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?, active = ?
+		SET title = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?, image = CASE WHEN ? != '' THEN ? ELSE image END, thumb = CASE WHEN ? != '' THEN ? ELSE thumb END, template_ar = ?, template_en = ?, active = ?
 		WHERE slug = ?
 	`
 	_, err = r.db.ExecContext(ctx, query,
-		c.Title, c.Lang, c.TextColor, c.HeadColor, string(boxesBytes), activeInt, c.Slug,
+		c.Title, c.Lang, c.TextColor, c.HeadColor, string(boxesBytes), c.Image, c.Image, c.Thumb, c.Thumb, templateARStr, templateENStr, activeInt, c.Slug,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update campaign: %w", err)

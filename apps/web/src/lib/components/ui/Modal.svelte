@@ -5,11 +5,12 @@
   interface Props {
     open: boolean;
     title?: string;
+    maxWidth?: string;
     onclose: () => void;
     children?: Snippet;
   }
 
-  let { open = false, title = '', onclose, children }: Props = $props();
+  let { open = false, title = '', maxWidth = '600px', onclose, children }: Props = $props();
 </script>
 
 {#if open}
@@ -17,6 +18,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="modal"
+      style={`max-width: ${maxWidth};`}
       onclick={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"

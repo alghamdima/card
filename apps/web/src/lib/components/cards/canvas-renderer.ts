@@ -211,11 +211,69 @@ function drawMessageSections(ctx: CanvasRenderingContext2D, sections: { heading?
   });
 }
 
+export function drawDynamicField(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  field: import('../../types/campaign.types').TextFieldConfig
+) {
+  if (!text || !field) return;
+  const rawText = String(text).trim();
+  if (!rawText) return;
+
+  const maxSize = Number(field.fontSize) || 40;
+  const minSize = Math.max(10, Math.round(maxSize * 0.4));
+  const weight = field.weight === 'regular' ? 'regular' : 'bold';
+  const boxW = field.width || 400;
+  const boxH = field.height || 80;
+  const align = field.align || 'center';
+
+  let chosen: { lines: string[]; lh: number; total: number; size: number } | null = null;
+
+  for (let size = maxSize; size >= minSize; size--) {
+    ctx.font = fontFor(rawText, size, weight);
+    const lines = wrapPlain(ctx, rawText, boxW);
+    const lh = size * 1.3;
+    const total = lines.length * lh;
+    let widest = 0;
+    lines.forEach((l) => {
+      widest = Math.max(widest, ctx.measureText(l).width);
+    });
+
+    if ((total <= boxH && widest <= boxW) || size === minSize) {
+      chosen = { lines, lh, total, size };
+      break;
+    }
+  }
+
+  if (!chosen) return;
+  ctx.font = fontFor(rawText, chosen.size, weight);
+  ctx.fillStyle = field.color || '#FFFFFF';
+  ctx.textBaseline = 'middle';
+
+  let startX = field.x + boxW / 2;
+  if (align === 'left') {
+    ctx.textAlign = 'left';
+    startX = field.x;
+  } else if (align === 'right') {
+    ctx.textAlign = 'right';
+    startX = field.x + boxW;
+  } else {
+    ctx.textAlign = 'center';
+  }
+
+  let y = field.y + (boxH - chosen.total) / 2;
+  chosen.lines.forEach((line) => {
+    ctx.fillText(line, startX, y + chosen!.lh / 2);
+    y += chosen!.lh;
+  });
+}
+
 export function renderCard(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement | null,
-  boxes: BoxesConfig,
-  data: { to?: string; from?: string; message?: string; heading?: string }
+  boxes: BoxesConfig | null | undefined,
+  data: { to?: string; from?: string; message?: string; heading?: string; fieldValues?: Record<string, any> },
+  dynamicFields?: import('../../types/campaign.types').TextFieldConfig[]
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -226,6 +284,19 @@ export function renderCard(
     ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
   }
 
+  // If dynamic fields are provided, render them
+  if (dynamicFields && dynamicFields.length > 0) {
+    const sorted = [...dynamicFields].sort((a, b) => (a.order || 0) - (b.order || 0));
+    for (const f of sorted) {
+      const val = data.fieldValues?.[f.id] ?? data.fieldValues?.[f.name] ?? (f.id === 'emp_name' || f.id === 'name' ? data.to : f.id === 'message' ? data.message : '');
+      if (val) {
+        drawDynamicField(ctx, String(val), f);
+      }
+    }
+    return;
+  }
+
+  // Fallback to legacy boxes config
   if (!boxes) return;
 
   if (data.to && boxes.to) {

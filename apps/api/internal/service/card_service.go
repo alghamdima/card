@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -27,12 +28,14 @@ func NewCardService(repo *repository.CardRepository, campaignRepo *repository.Ca
 }
 
 type SaveCardInput struct {
-	CampaignSlug string `json:"campaignSlug"`
-	FromName     string `json:"from"`
-	ToName       string `json:"to"`
-	Message      string `json:"message"`
-	Heading      string `json:"heading"`
-	Device       string `json:"device"`
+	CampaignSlug string                 `json:"campaignSlug"`
+	FromName     string                 `json:"from"`
+	ToName       string                 `json:"to"`
+	Message      string                 `json:"message"`
+	Heading      string                 `json:"heading"`
+	Lang         string                 `json:"lang"`
+	FieldValues  map[string]interface{} `json:"fieldValues"`
+	Device       string                 `json:"device"`
 }
 
 func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domain.Card, error) {
@@ -55,8 +58,21 @@ func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domai
 		from = "Anonymous"
 	}
 	to := strings.TrimSpace(input.ToName)
+	// If fieldValues has an emp_name or name or to, backfill toName
+	if to == "" && input.FieldValues != nil {
+		if val, ok := input.FieldValues["emp_name"]; ok && val != nil {
+			to = strings.TrimSpace(fmt.Sprintf("%v", val))
+		} else if val, ok := input.FieldValues["name"]; ok && val != nil {
+			to = strings.TrimSpace(fmt.Sprintf("%v", val))
+		}
+	}
+
 	msg := strings.TrimSpace(input.Message)
 	heading := strings.TrimSpace(input.Heading)
+	lang := input.Lang
+	if lang != "en" {
+		lang = "ar"
+	}
 	device := strings.TrimSpace(input.Device)
 	if device == "" {
 		device = "Web"
@@ -76,6 +92,8 @@ func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domai
 		ToName:       to,
 		Message:      msg,
 		Heading:      heading,
+		Lang:         lang,
+		FieldValues:  input.FieldValues,
 		Device:       device,
 		DateStr:      dateStr,
 		TimeStr:      timeStr,
@@ -87,6 +105,10 @@ func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domai
 	}
 
 	return card, nil
+}
+
+func (s *CardService) GetCampaignAnalyticsList(ctx context.Context) ([]domain.CampaignAnalytics, error) {
+	return s.repo.GetCampaignAnalyticsList(ctx)
 }
 
 func (s *CardService) GetCardsByCampaign(ctx context.Context, slug string) ([]domain.Card, error) {

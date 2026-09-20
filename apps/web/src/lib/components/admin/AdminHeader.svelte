@@ -13,13 +13,13 @@
 <header class="admin-header">
   <div class="brand">
     <a href="/admin/dashboard" class="logo">
-      <span class="icon">✨</span>
+      <img src="/images/brand/aljuf-ar.png" alt="ALJ Finance" class="admin-brand-logo" />
       <span class="name">{$t('admin.title')}</span>
     </a>
   </div>
 
   <nav class="nav-links">
-    <a href="/admin/dashboard" class="nav-link">{$t('nav.dashboard')}</a>
+    <a href="/admin/dashboard" class="nav-link">{$t('admin.analytics')}</a>
     <a href="/admin/cards" class="nav-link">{$t('nav.campaigns')}</a>
     <a href="/admin/users" class="nav-link">{$t('nav.cards')}</a>
   </nav>
@@ -37,7 +37,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 24px;
+    padding: 14px 24px;
     background: var(--surface-1);
     border-bottom: 1px solid var(--color-border);
     gap: 16px;
@@ -46,10 +46,16 @@
   .brand .logo {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     font-size: 16px;
     font-weight: 800;
     color: var(--text-main);
+    text-decoration: none;
+  }
+
+  .admin-brand-logo {
+    height: 34px;
+    object-fit: contain;
   }
 
   .nav-links {

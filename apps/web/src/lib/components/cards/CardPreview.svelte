@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CANVAS_W, CANVAS_H, renderCard, ensureFontsLoaded } from './canvas-renderer';
-  import type { BoxesConfig } from '../../types/campaign.types';
+  import type { BoxesConfig, TextFieldConfig } from '../../types/campaign.types';
 
   interface Props {
     imageSrc: string;
-    boxes: BoxesConfig;
+    boxes?: BoxesConfig | null;
+    dynamicFields?: TextFieldConfig[];
+    fieldValues?: Record<string, any>;
     to?: string;
     from?: string;
     message?: string;
@@ -15,7 +17,9 @@
 
   let {
     imageSrc,
-    boxes,
+    boxes = null,
+    dynamicFields = [],
+    fieldValues = {},
     to = '',
     from = '',
     message = '',
@@ -29,27 +33,31 @@
 
   function draw() {
     if (!canvasEl) return;
-    renderCard(canvasEl, bgImg, boxes, { to, from, message, heading });
+    renderCard(canvasEl, bgImg, boxes, { to, from, message, heading, fieldValues }, dynamicFields);
   }
 
   $effect(() => {
-    // Redraw whenever text or boxes change
-    if (isReady && (to !== undefined || from !== undefined || message !== undefined)) {
+    // Redraw whenever text, fields or values change
+    if (isReady && (to !== undefined || from !== undefined || message !== undefined || fieldValues !== undefined || dynamicFields !== undefined)) {
       draw();
     }
   });
 
-  onMount(() => {
-    ensureFontsLoaded().then(() => {
-      bgImg = new Image();
-      bgImg.crossOrigin = 'anonymous';
-      bgImg.onload = () => {
-        isReady = true;
-        draw();
-        if (onready) onready(canvasEl);
-      };
-      bgImg.src = imageSrc;
-    });
+  $effect(() => {
+    // Reload image when imageSrc changes
+    if (imageSrc && typeof window !== 'undefined') {
+      ensureFontsLoaded().then(() => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          bgImg = img;
+          isReady = true;
+          draw();
+          if (onready && canvasEl) onready(canvasEl);
+        };
+        img.src = imageSrc;
+      });
+    }
   });
 
   export function getCanvas(): HTMLCanvasElement {

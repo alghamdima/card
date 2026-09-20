@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -18,13 +19,21 @@ func NewCardRepository(db *sql.DB) *CardRepository {
 }
 
 func (r *CardRepository) Save(ctx context.Context, card *domain.Card) error {
+	var fieldValuesStr sql.NullString
+	if card.FieldValues != nil {
+		b, err := json.Marshal(card.FieldValues)
+		if err == nil {
+			fieldValuesStr = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+
 	query := `
-		INSERT INTO campaign_cards (campaign_slug, from_name, to_name, message, heading, device, date_str, time_str)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO campaign_cards (campaign_slug, from_name, to_name, message, heading, lang, field_values, device, date_str, time_str)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		card.CampaignSlug, card.FromName, card.ToName, card.Message,
-		card.Heading, card.Device, card.DateStr, card.TimeStr,
+		card.Heading, card.Lang, fieldValuesStr, card.Device, card.DateStr, card.TimeStr,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save card: %w", err)
@@ -37,7 +46,7 @@ func (r *CardRepository) Save(ctx context.Context, card *domain.Card) error {
 
 func (r *CardRepository) GetByCampaignSlug(ctx context.Context, slug string) ([]domain.Card, error) {
 	query := `
-		SELECT id, campaign_slug, from_name, to_name, message, heading, device, date_str, time_str, created_at
+		SELECT id, campaign_slug, from_name, to_name, message, heading, COALESCE(lang, 'ar'), field_values, device, date_str, time_str, created_at
 		FROM campaign_cards
 		WHERE campaign_slug = ?
 		ORDER BY id DESC
@@ -52,11 +61,15 @@ func (r *CardRepository) GetByCampaignSlug(ctx context.Context, slug string) ([]
 	for rows.Next() {
 		var c domain.Card
 		var createdAtStr string
+		var fieldValuesRaw sql.NullString
 		if err := rows.Scan(
 			&c.ID, &c.CampaignSlug, &c.FromName, &c.ToName, &c.Message,
-			&c.Heading, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
+			&c.Heading, &c.Lang, &fieldValuesRaw, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
 		); err != nil {
 			return nil, err
+		}
+		if fieldValuesRaw.Valid && fieldValuesRaw.String != "" {
+			_ = json.Unmarshal([]byte(fieldValuesRaw.String), &c.FieldValues)
 		}
 		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
 		if c.CreatedAt.IsZero() {
@@ -76,7 +89,7 @@ func (r *CardRepository) GetAll(ctx context.Context, limit, offset int) ([]domai
 	}
 
 	query := `
-		SELECT id, campaign_slug, from_name, to_name, message, heading, device, date_str, time_str, created_at
+		SELECT id, campaign_slug, from_name, to_name, message, heading, COALESCE(lang, 'ar'), field_values, device, date_str, time_str, created_at
 		FROM campaign_cards
 		ORDER BY id DESC
 		LIMIT ? OFFSET ?
@@ -91,11 +104,15 @@ func (r *CardRepository) GetAll(ctx context.Context, limit, offset int) ([]domai
 	for rows.Next() {
 		var c domain.Card
 		var createdAtStr string
+		var fieldValuesRaw sql.NullString
 		if err := rows.Scan(
 			&c.ID, &c.CampaignSlug, &c.FromName, &c.ToName, &c.Message,
-			&c.Heading, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
+			&c.Heading, &c.Lang, &fieldValuesRaw, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
 		); err != nil {
 			return nil, 0, err
+		}
+		if fieldValuesRaw.Valid && fieldValuesRaw.String != "" {
+			_ = json.Unmarshal([]byte(fieldValuesRaw.String), &c.FieldValues)
 		}
 		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
 		if c.CreatedAt.IsZero() {
@@ -105,6 +122,36 @@ func (r *CardRepository) GetAll(ctx context.Context, limit, offset int) ([]domai
 	}
 
 	return list, total, nil
+}
+
+func (r *CardRepository) GetCampaignAnalyticsList(ctx context.Context) ([]domain.CampaignAnalytics, error) {
+	query := `
+		SELECT c.slug, c.title,
+		       COUNT(k.id) as total_cards,
+		       COALESCE(SUM(CASE WHEN k.date_str = ? OR date(k.created_at) = date('now') THEN 1 ELSE 0 END), 0) as cards_today,
+		       COALESCE(MAX(k.created_at), '') as last_card_at
+		FROM campaigns c
+		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
+		GROUP BY c.slug
+		ORDER BY total_cards DESC, c.id DESC
+	`
+	today := time.Now().Format("02/01/2006")
+	rows, err := r.db.QueryContext(ctx, query, today)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query campaign analytics: %w", err)
+	}
+	defer rows.Close()
+
+	var list []domain.CampaignAnalytics
+	for rows.Next() {
+		var item domain.CampaignAnalytics
+		if err := rows.Scan(&item.Slug, &item.Title, &item.TotalCards, &item.CardsToday, &item.LastCardAt); err != nil {
+			return nil, err
+		}
+		list = append(list, item)
+	}
+
+	return list, nil
 }
 
 func (r *CardRepository) GetDashboardStats(ctx context.Context) (*domain.DashboardStats, error) {

@@ -11,7 +11,15 @@ export const campaignsApi = {
     return request<Campaign>(`/campaigns/${slug}`);
   },
 
-  submitCard: async (slug: string, data: { from: string; to: string; message: string; heading?: string; device?: string }): Promise<{ saved: boolean; id: number }> => {
+  submitCard: async (slug: string, data: {
+    from?: string;
+    to?: string;
+    message?: string;
+    heading?: string;
+    lang?: string;
+    fieldValues?: Record<string, any>;
+    device?: string;
+  }): Promise<{ saved: boolean; id: number }> => {
     return request<{ saved: boolean; id: number }>(`/campaigns/${slug}/cards`, {
       method: 'POST',
       body: JSON.stringify(data)
@@ -57,5 +65,13 @@ export const campaignsApi = {
 
   getDashboardStats: async (): Promise<DashboardStats> => {
     return request<DashboardStats>('/admin/dashboard');
+  },
+
+  getAnalyticsOverview: async (): Promise<{ campaigns: import('../types/campaign.types').CampaignAnalytics[] }> => {
+    return request<{ campaigns: import('../types/campaign.types').CampaignAnalytics[] }>('/admin/analytics/overview');
+  },
+
+  getExportUrl: (slug: string): string => {
+    return `/api/v1/admin/campaigns/${slug}/export`;
   }
 };

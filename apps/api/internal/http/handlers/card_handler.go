@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -97,4 +98,52 @@ func (h *CardHandler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSONOK(w, stats)
+}
+
+// Admin: Campaign Analytics Overview for tabs
+func (h *CardHandler) AnalyticsOverview(w http.ResponseWriter, r *http.Request) {
+	list, err := h.cardService.GetCampaignAnalyticsList(r.Context())
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load campaign analytics")
+		return
+	}
+
+	JSONOK(w, map[string]interface{}{
+		"campaigns": list,
+	})
+}
+
+// Admin: Export cards as CSV for a campaign
+func (h *CardHandler) ExportCampaignCSV(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	cards, err := h.cardService.GetCardsByCampaign(r.Context(), slug)
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load cards for export")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+slug+"-cards.csv\"")
+	// Write UTF-8 BOM for Excel Arabic character support
+	w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	w.Write([]byte("ID,Full Name,Job Title / Details,Sender,Language,Date,Time\n"))
+	for _, c := range cards {
+		details := c.Message
+		if details == "" && c.FieldValues != nil {
+			if jt, ok := c.FieldValues["job_title"]; ok && jt != nil {
+				details = strconv.Quote(fmt.Sprintf("%v", jt))
+			}
+		}
+		line := fmt.Sprintf("%d,%s,%s,%s,%s,%s,%s\n",
+			c.ID,
+			strconv.Quote(c.ToName),
+			strconv.Quote(details),
+			strconv.Quote(c.FromName),
+			c.Lang,
+			c.DateStr,
+			c.TimeStr,
+		)
+		w.Write([]byte(line))
+	}
 }

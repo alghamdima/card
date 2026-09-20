@@ -35,7 +35,9 @@
 <div class="page-container">
   <header class="top-header">
     <div class="header-content">
-      <span class="sparkle">✨</span>
+      <div class="brand-row">
+        <img src="/images/brand/aljuf-ar.png" alt="Abdul Latif Jameel Finance" class="main-aljuf-logo" />
+      </div>
       <h1>{$t('app.title')}</h1>
       <p>{$t('app.subtitle')}</p>
     </div>
@@ -104,12 +106,16 @@
   .header-content {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
-  .sparkle {
-    font-size: 24px;
-    margin-bottom: 2px;
+  .brand-row {
+    margin-bottom: 4px;
+  }
+
+  .main-aljuf-logo {
+    height: 48px;
+    object-fit: contain;
   }
 
   h1 {

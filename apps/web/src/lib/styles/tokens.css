@@ -1,10 +1,15 @@
 :root {
-  /* Brand colors */
+  /* Brand colors (ALJ Finance Identity) */
   --color-primary: #3C1053;
   --color-primary-dark: #2B0A3D;
   --color-primary-light: #521970;
   --color-accent: #FFCD00;
   --color-accent-hover: #F2CB28;
+  --color-gray: #63656A;
+  --color-gray-dark: #5C6670;
+  --color-blue: #47859F;
+  --color-purple-light: #8C5BA6;
+  --color-purple-tint: #F4EEF7;
   
   /* Backgrounds & surfaces */
   --bg-app: #0A0A0C;

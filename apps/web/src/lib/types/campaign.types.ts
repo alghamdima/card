@@ -1,3 +1,26 @@
+export interface TextFieldConfig {
+  id: string;
+  name: string;
+  label: string;
+  placeholder?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  color: string;
+  weight?: 'bold' | 'regular';
+  align?: 'center' | 'right' | 'left';
+  maxChars?: number;
+  required?: boolean;
+  order: number;
+}
+
+export interface TemplateVariant {
+  image: string;
+  fields: TextFieldConfig[];
+}
+
 export interface BoxItem {
   top: number;
   bottom: number;
@@ -26,6 +49,8 @@ export interface Campaign {
   boxes: BoxesConfig;
   image: string;
   thumb?: string;
+  templateAR?: TemplateVariant;
+  templateEN?: TemplateVariant;
   active: boolean;
   createdAt: string;
 }
@@ -49,6 +74,8 @@ export interface Card {
   to: string;
   message: string;
   heading?: string;
+  lang?: string;
+  fieldValues?: Record<string, any>;
   device: string;
   date: string;
   time: string;
@@ -61,6 +88,14 @@ export interface DashboardStats {
   totalCards: number;
   cardsToday: number;
   deviceStats: Record<string, number>;
+}
+
+export interface CampaignAnalytics {
+  slug: string;
+  title: string;
+  totalCards: number;
+  cardsToday: number;
+  lastCardAt?: string;
 }
 
 export interface ApiResponse<T> {

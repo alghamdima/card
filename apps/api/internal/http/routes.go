@@ -67,8 +67,9 @@ func SetupRoutes(params RouterParams) http.Handler {
 		v1.Route("/admin", func(admin chi.Router) {
 			admin.Use(appmiddleware.RequireAuth(params.AuthService))
 
-			// Dashboard stats
+			// Dashboard stats & Analytics
 			admin.Get("/dashboard", cardHandler.DashboardStats)
+			admin.Get("/analytics/overview", cardHandler.AnalyticsOverview)
 
 			// Campaigns management
 			admin.Get("/campaigns", campaignHandler.ListAdmin)
@@ -77,8 +78,9 @@ func SetupRoutes(params RouterParams) http.Handler {
 			admin.Put("/campaigns/{slug}", campaignHandler.Update)
 			admin.Delete("/campaigns/{slug}", campaignHandler.Delete)
 
-			// Cards management
+			// Cards management & CSV Export
 			admin.Get("/campaigns/{slug}/cards", cardHandler.ListByCampaign)
+			admin.Get("/campaigns/{slug}/export", cardHandler.ExportCampaignCSV)
 			admin.Get("/cards", cardHandler.ListAll)
 		})
 	})

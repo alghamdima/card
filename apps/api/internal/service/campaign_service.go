@@ -91,14 +91,16 @@ func (s *CampaignService) GetCampaignDetails(ctx context.Context, slug string) (
 }
 
 type CreateCampaignInput struct {
-	Title     string              `json:"title"`
-	Slug      string              `json:"slug"` // Optional: if empty, will be auto-generated randomly!
-	Lang      string              `json:"lang"`
-	TextColor string              `json:"textColor"`
-	HeadColor string              `json:"headColor"`
-	Boxes     *domain.BoxesConfig `json:"boxes"`
-	Image     string              `json:"image"`
-	Thumb     string              `json:"thumb"`
+	Title      string                  `json:"title"`
+	Slug       string                  `json:"slug"` // Optional: if empty, will be auto-generated randomly!
+	Lang       string                  `json:"lang"`
+	TextColor  string                  `json:"textColor"`
+	HeadColor  string                  `json:"headColor"`
+	Boxes      *domain.BoxesConfig     `json:"boxes"`
+	Image      string                  `json:"image"`
+	Thumb      string                  `json:"thumb"`
+	TemplateAR *domain.TemplateVariant `json:"templateAR,omitempty"`
+	TemplateEN *domain.TemplateVariant `json:"templateEN,omitempty"`
 }
 
 func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampaignInput) (*domain.Campaign, error) {
@@ -106,7 +108,7 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 	if title == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrInvalidCampaignInput)
 	}
-	if input.Image == "" {
+	if input.Image == "" && input.TemplateAR == nil {
 		return nil, fmt.Errorf("%w: image is required", ErrInvalidCampaignInput)
 	}
 
@@ -143,6 +145,15 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 		headColor = "#FFCD00"
 	}
 
+	image := input.Image
+	if image == "" && input.TemplateAR != nil {
+		image = input.TemplateAR.Image
+	}
+	thumb := input.Thumb
+	if thumb == "" {
+		thumb = image
+	}
+
 	boxes := input.Boxes
 	if boxes == nil {
 		boxes = &domain.BoxesConfig{
@@ -162,15 +173,17 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 	}
 
 	camp := &domain.Campaign{
-		Slug:      slug,
-		Title:     title,
-		Lang:      lang,
-		TextColor: textColor,
-		HeadColor: headColor,
-		Boxes:     *boxes,
-		Image:     input.Image,
-		Thumb:     input.Thumb,
-		Active:    true,
+		Slug:       slug,
+		Title:      title,
+		Lang:       lang,
+		TextColor:  textColor,
+		HeadColor:  headColor,
+		Boxes:      *boxes,
+		Image:      image,
+		Thumb:      thumb,
+		TemplateAR: input.TemplateAR,
+		TemplateEN: input.TemplateEN,
+		Active:     true,
 	}
 
 	if err := s.repo.Create(ctx, camp); err != nil {
@@ -181,12 +194,16 @@ func (s *CampaignService) CreateCampaign(ctx context.Context, input CreateCampai
 }
 
 type UpdateCampaignInput struct {
-	Title     string              `json:"title"`
-	Lang      string              `json:"lang"`
-	TextColor string              `json:"textColor"`
-	HeadColor string              `json:"headColor"`
-	Boxes     *domain.BoxesConfig `json:"boxes"`
-	Active    *bool               `json:"active"`
+	Title      string                  `json:"title"`
+	Lang       string                  `json:"lang"`
+	TextColor  string                  `json:"textColor"`
+	HeadColor  string                  `json:"headColor"`
+	Boxes      *domain.BoxesConfig     `json:"boxes"`
+	Image      string                  `json:"image,omitempty"`
+	Thumb      string                  `json:"thumb,omitempty"`
+	TemplateAR *domain.TemplateVariant `json:"templateAR,omitempty"`
+	TemplateEN *domain.TemplateVariant `json:"templateEN,omitempty"`
+	Active     *bool                   `json:"active"`
 }
 
 func (s *CampaignService) UpdateCampaign(ctx context.Context, slug string, input UpdateCampaignInput) (*domain.Campaign, error) {
@@ -212,6 +229,18 @@ func (s *CampaignService) UpdateCampaign(ctx context.Context, slug string, input
 	}
 	if input.Boxes != nil {
 		camp.Boxes = *input.Boxes
+	}
+	if input.Image != "" {
+		camp.Image = input.Image
+	}
+	if input.Thumb != "" {
+		camp.Thumb = input.Thumb
+	}
+	if input.TemplateAR != nil {
+		camp.TemplateAR = input.TemplateAR
+	}
+	if input.TemplateEN != nil {
+		camp.TemplateEN = input.TemplateEN
 	}
 	if input.Active != nil {
 		camp.Active = *input.Active
