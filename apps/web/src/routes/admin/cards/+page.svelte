@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import { isAnonymousSender } from '$lib/utils/cards';
+  import { isAnonymousSender, getCardData } from '$lib/utils/cards';
   import { t, locale, formatDate, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { Campaign, CampaignSummary, Card, TextFieldConfig } from '$lib/types/campaign.types';
@@ -616,10 +616,11 @@
         </thead>
         <tbody>
           {#each campaignCards as card (card.id)}
+            {@const cardData = getCardData(card)}
             <tr>
-              <td><strong>{card.to || '-'}</strong></td>
-              <td class="msg-cell">{card.message || card.fieldValues?.job_title || '-'}</td>
-              <td>{isAnonymousSender(card.from) ? $t('app.anonymous') : card.from}</td>
+              <td><strong>{cardData.to || '-'}</strong></td>
+              <td class="msg-cell">{cardData.message || '-'}</td>
+              <td>{cardData.from ? cardData.from : $t('app.anonymous')}</td>
               <td>{card.date} {card.time}</td>
             </tr>
           {/each}

@@ -123,8 +123,13 @@ func cardDetails(c domain.Card) string {
 	if c.Message != "" {
 		return c.Message
 	}
-	if jobTitle, ok := c.FieldValues["job_title"]; ok && jobTitle != nil {
-		return fmt.Sprint(jobTitle)
+	for _, k := range []string{"job_title", "title", "message", "details", "field_muaw8lag", "field_muazzyhs"} {
+		if val, ok := c.FieldValues[k]; ok && val != nil {
+			s := fmt.Sprint(val)
+			if s != "" {
+				return s
+			}
+		}
 	}
 	return ""
 }

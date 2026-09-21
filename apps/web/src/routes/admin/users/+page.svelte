@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { isAnonymousSender } from '$lib/utils/cards';
+  import { isAnonymousSender, getCardData } from '$lib/utils/cards';
   import { t, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { Card } from '$lib/types/campaign.types';
@@ -77,14 +77,15 @@
           </thead>
           <tbody>
             {#each cards as card, idx (card.id)}
+              {@const cardData = getCardData(card)}
               <tr>
                 <td class="num-col">{total - offset - idx}</td>
                 <td>
                   <span class="slug-tag">{card.campaignSlug}</span>
                 </td>
-                <td><strong>{card.to || '-'}</strong></td>
-                <td class="msg-col">{card.message || card.fieldValues?.job_title || '-'}</td>
-                <td>{isAnonymousSender(card.from) ? $t('app.anonymous') : card.from}</td>
+                <td><strong>{cardData.to || '-'}</strong></td>
+                <td class="msg-col">{cardData.message || '-'}</td>
+                <td>{cardData.from ? cardData.from : $t('app.anonymous')}</td>
                 <td class="date-col">{card.date} {card.time}</td>
               </tr>
             {/each}

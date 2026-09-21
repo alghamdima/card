@@ -177,11 +177,22 @@
 
       // Anonymous telemetry for the admin analytics; never blocks or fails the export.
       const device = isIOS ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android' : 'Desktop';
+
+      // Resolve recipient (to), message, and sender (from) from dynamic fields if not fixed
+      const sortedFields = [...activeFields].sort((a, b) => (a.order || 0) - (b.order || 0));
+      const firstFieldVal = sortedFields[0] ? (fieldValues[sortedFields[0].id] || '') : '';
+      const secondFieldVal = sortedFields[1] ? (fieldValues[sortedFields[1].id] || '') : '';
+      const thirdFieldVal = sortedFields[2] ? (fieldValues[sortedFields[2].id] || '') : '';
+
+      const resolvedTo = fieldValues['emp_name'] || fieldValues['name'] || toName || firstFieldVal;
+      const resolvedMessage = fieldValues['job_title'] || fieldValues['title'] || messageText || secondFieldVal;
+      const resolvedFrom = isAnonymous ? '' : (fromName.trim() || thirdFieldVal.trim());
+
       campaignsApi
         .submitCard(campaign.slug, {
-          from: isAnonymous ? '' : fromName.trim(),
-          to: fieldValues['emp_name'] || fieldValues['name'] || toName,
-          message: fieldValues['job_title'] || fieldValues['title'] || messageText,
+          from: resolvedFrom,
+          to: resolvedTo,
+          message: resolvedMessage,
           lang: cardLang,
           fieldValues: { ...fieldValues },
           device

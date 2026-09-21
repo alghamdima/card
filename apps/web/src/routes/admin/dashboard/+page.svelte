@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { t, locale, formatTime, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
+  import { getCardData } from '$lib/utils/cards';
   import type { CampaignAnalytics, Card, DashboardStats as Stats } from '$lib/types/campaign.types';
   import Pager from '$lib/components/ui/Pager.svelte';
   import DashboardStats from '$lib/components/admin/DashboardStats.svelte';
@@ -236,12 +237,13 @@
               </thead>
               <tbody>
                 {#each campaignCards as card (card.id)}
+                  {@const cardData = getCardData(card)}
                   <tr>
                     <td class="name-cell">
-                      <strong>{card.to || '-'}</strong>
+                      <strong>{cardData.to || '-'}</strong>
                     </td>
                     <td class="details-cell">
-                      {card.message || card.fieldValues?.job_title || '-'}
+                      {cardData.message || '-'}
                     </td>
                     <td>
                       <span class="lang-tag" class:en={card.lang === 'en'}>

@@ -77,8 +77,12 @@ func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domai
 	if err != nil {
 		return nil, err
 	}
-	if from == "" {
-		from = anonymousSender
+	if from == "" || from == anonymousSender {
+		// Dynamic templates might carry the sender in field values.
+		from = firstNonEmpty(fieldValues["sender"], fieldValues["from"], fieldValues["field_muazy5dq"], fieldValues["field_muazzyzg"])
+		if from == "" {
+			from = anonymousSender
+		}
 	}
 	to, err := cleanCardText("to", input.ToName, maxNameRunes)
 	if err != nil {
@@ -86,11 +90,22 @@ func (s *CardService) SaveCard(ctx context.Context, input SaveCardInput) (*domai
 	}
 	if to == "" {
 		// Dynamic templates carry the recipient inside the field values.
-		to = firstNonEmpty(fieldValues["emp_name"], fieldValues["name"])
+		to = firstNonEmpty(fieldValues["emp_name"], fieldValues["name"], fieldValues["recipient"], fieldValues["to"], fieldValues["field_muaw7h5a"], fieldValues["field_muazzxxu"])
+		if to == "" && len(fieldValues) > 0 {
+			for _, v := range fieldValues {
+				if v != "" {
+					to = v
+					break
+				}
+			}
+		}
 	}
 	message, err := cleanCardText("message", input.Message, maxMessageRunes)
 	if err != nil {
 		return nil, err
+	}
+	if message == "" {
+		message = firstNonEmpty(fieldValues["job_title"], fieldValues["title"], fieldValues["message"], fieldValues["details"], fieldValues["field_muaw8lag"], fieldValues["field_muazzyhs"])
 	}
 	heading, err := cleanCardText("heading", input.Heading, maxNameRunes)
 	if err != nil {
