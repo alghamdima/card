@@ -1,77 +1,79 @@
-import { request } from './client';
-import type { Campaign, CampaignSummary, Card, DashboardStats } from '../types/campaign.types';
+import { downloadFile, request } from './client';
+import type {
+  Campaign,
+  CampaignAnalytics,
+  CampaignSummary,
+  CardsPage,
+  DashboardStats,
+  PublicCampaignSummary
+} from '../types/campaign.types';
+
+export interface SubmitCardInput {
+  from?: string;
+  to?: string;
+  message?: string;
+  heading?: string;
+  lang?: string;
+  fieldValues?: Record<string, string>;
+  device?: string;
+}
+
+export interface CardsQuery {
+  limit?: number;
+  offset?: number;
+  q?: string;
+}
+
+function toQuery(params: CardsQuery): string {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  if (params.q) qs.set('q', params.q);
+  const text = qs.toString();
+  return text ? `?${text}` : '';
+}
+
+// Slugs come from the URL bar on public pages, so they are always encoded.
+const seg = encodeURIComponent;
 
 export const campaignsApi = {
   // Public endpoints
-  listPublic: async (): Promise<{ campaigns: CampaignSummary[] }> => {
-    return request<{ campaigns: CampaignSummary[] }>('/campaigns');
-  },
+  listPublic: () => request<{ campaigns: PublicCampaignSummary[] }>('/campaigns'),
 
-  getPublic: async (slug: string): Promise<Campaign> => {
-    return request<Campaign>(`/campaigns/${slug}`);
-  },
+  getPublic: (slug: string) => request<Campaign>(`/campaigns/${seg(slug)}`),
 
-  submitCard: async (slug: string, data: {
-    from?: string;
-    to?: string;
-    message?: string;
-    heading?: string;
-    lang?: string;
-    fieldValues?: Record<string, any>;
-    device?: string;
-  }): Promise<{ saved: boolean; id: number }> => {
-    return request<{ saved: boolean; id: number }>(`/campaigns/${slug}/cards`, {
+  submitCard: (slug: string, data: SubmitCardInput) =>
+    request<{ saved: boolean; id: number }>(`/campaigns/${seg(slug)}/cards`, {
       method: 'POST',
       body: JSON.stringify(data)
-    });
-  },
+    }),
 
   // Admin endpoints
-  listAdmin: async (): Promise<{ campaigns: CampaignSummary[] }> => {
-    return request<{ campaigns: CampaignSummary[] }>('/admin/campaigns');
-  },
+  listAdmin: () => request<{ campaigns: CampaignSummary[] }>('/admin/campaigns'),
 
-  getAdmin: async (slug: string): Promise<Campaign> => {
-    return request<Campaign>(`/admin/campaigns/${slug}`);
-  },
+  getAdmin: (slug: string) => request<Campaign>(`/admin/campaigns/${seg(slug)}`),
 
-  create: async (data: Partial<Campaign>): Promise<Campaign> => {
-    return request<Campaign>('/admin/campaigns', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-  },
+  // Uploads carry base64 artwork, so they get a longer timeout than regular calls.
+  create: (data: Partial<Campaign>) =>
+    request<Campaign>('/admin/campaigns', { method: 'POST', body: JSON.stringify(data), timeoutMs: 120_000 }),
 
-  update: async (slug: string, data: Partial<Campaign>): Promise<Campaign> => {
-    return request<Campaign>(`/admin/campaigns/${slug}`, {
+  update: (slug: string, data: Partial<Campaign>) =>
+    request<Campaign>(`/admin/campaigns/${seg(slug)}`, {
       method: 'PUT',
-      body: JSON.stringify(data)
-    });
-  },
+      body: JSON.stringify(data),
+      timeoutMs: 120_000
+    }),
 
-  delete: async (slug: string): Promise<{ deleted: boolean }> => {
-    return request<{ deleted: boolean }>(`/admin/campaigns/${slug}`, {
-      method: 'DELETE'
-    });
-  },
+  delete: (slug: string) => request<{ deleted: boolean }>(`/admin/campaigns/${seg(slug)}`, { method: 'DELETE' }),
 
-  getCampaignCards: async (slug: string): Promise<{ slug: string; cards: Card[]; total: number }> => {
-    return request<{ slug: string; cards: Card[]; total: number }>(`/admin/campaigns/${slug}/cards`);
-  },
+  getCampaignCards: (slug: string, query: CardsQuery = {}) =>
+    request<CardsPage>(`/admin/campaigns/${seg(slug)}/cards${toQuery(query)}`),
 
-  getAllCards: async (limit = 50, offset = 0): Promise<{ cards: Card[]; total: number }> => {
-    return request<{ cards: Card[]; total: number }>(`/admin/cards?limit=${limit}&offset=${offset}`);
-  },
+  getAllCards: (query: CardsQuery = {}) => request<CardsPage>(`/admin/cards${toQuery(query)}`),
 
-  getDashboardStats: async (): Promise<DashboardStats> => {
-    return request<DashboardStats>('/admin/dashboard');
-  },
+  getDashboardStats: () => request<DashboardStats>('/admin/dashboard'),
 
-  getAnalyticsOverview: async (): Promise<{ campaigns: import('../types/campaign.types').CampaignAnalytics[] }> => {
-    return request<{ campaigns: import('../types/campaign.types').CampaignAnalytics[] }>('/admin/analytics/overview');
-  },
+  getAnalyticsOverview: () => request<{ campaigns: CampaignAnalytics[] }>('/admin/analytics/overview'),
 
-  getExportUrl: (slug: string): string => {
-    return `/api/v1/admin/campaigns/${slug}/export`;
-  }
+  downloadExport: (slug: string) => downloadFile(`/admin/campaigns/${seg(slug)}/export`, `${slug}-cards.csv`)
 };

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n';
+
   interface Props {
     id?: string;
     label?: string;
@@ -9,11 +11,14 @@
     error?: string;
     optional?: boolean;
     disabled?: boolean;
+    autocomplete?: AutoFill;
     oninput?: (e: Event) => void;
   }
 
+  const fallbackId = `inp-${Math.random().toString(36).slice(2, 9)}`;
+
   let {
-    id = `inp-${Math.random().toString(36).substring(2, 9)}`,
+    id = fallbackId,
     label,
     value = $bindable(''),
     placeholder = '',
@@ -22,6 +27,7 @@
     error,
     optional = false,
     disabled = false,
+    autocomplete,
     oninput
   }: Props = $props();
 </script>
@@ -31,7 +37,7 @@
     <label class="label" for={id}>
       <span>{label}</span>
       {#if optional}
-        <span class="opt">(optional)</span>
+        <span class="opt">{$t('card.optional')}</span>
       {/if}
     </label>
   {/if}
@@ -43,16 +49,18 @@
     {placeholder}
     {maxlength}
     {disabled}
+    {autocomplete}
     class="input"
     class:has-error={!!error}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={error ? `${id}-error` : undefined}
     {oninput}
   />
 
   {#if error}
-    <span class="error-msg">{error}</span>
+    <span class="error-msg" id="{id}-error" role="alert">{error}</span>
   {/if}
 </div>
-
 <style>
   .input-wrapper {
     display: flex;

@@ -1,10 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
-  import { t, locale } from '$lib/i18n';
+  import { untrack } from 'svelte';
+  import { t, locale, translateError } from '$lib/i18n';
+  import { get } from 'svelte/store';
   import { campaignsApi } from '$lib/api/campaigns';
-  import type { Campaign } from '$lib/types/campaign.types';
+  import type { Campaign, TemplateVariant } from '$lib/types/campaign.types';
   import CardPreview from '$lib/components/cards/CardPreview.svelte';
+  import CardEditor from '$lib/components/cards/CardEditor.svelte';
+  import BrandLogo from '$lib/components/ui/BrandLogo.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
@@ -12,18 +15,20 @@
   import ThemeSwitcher from '$lib/components/ui/ThemeSwitcher.svelte';
   import { showToast } from '$lib/components/ui/toast.store';
 
+  type CardLang = 'ar' | 'en';
+
   let slug = $derived(page.params.slug);
   let campaign = $state<Campaign | null>(null);
   let loading = $state(true);
   let errorMsg = $state('');
 
-  // Selected language for the card template: 'ar' or 'en'
-  let cardLang = $state<'ar' | 'en'>('ar');
+  // Language of the card template the employee designs (independent from the UI language).
+  let cardLang = $state<CardLang>('ar');
 
-  // Dynamic field values
+  // Values typed into the dynamic template fields, keyed by field id.
   let fieldValues = $state<Record<string, string>>({});
 
-  // Legacy fallback fields
+  // Legacy campaigns (fixed boxes instead of dynamic fields) use these fields.
   let toName = $state('');
   let messageText = $state('');
   let fromName = $state('');
@@ -33,118 +38,166 @@
   let downloadedSuccess = $state(false);
   let cardPreviewComponent = $state<CardPreview | null>(null);
 
-  // Active template variant derived from cardLang
-  let activeVariant = $derived.by(() => {
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  let hasBothTemplates = $derived(!!campaign?.templateAR && !!campaign?.templateEN);
+
+  // Template variant for the selected card language; a missing variant falls back to the other one.
+  let activeVariant = $derived.by<TemplateVariant | null>(() => {
     if (!campaign) return null;
-    if (cardLang === 'en' && campaign.templateEN?.image) {
-      return campaign.templateEN;
-    }
-    if (campaign.templateAR?.image) {
-      return campaign.templateAR;
-    }
-    return null;
+    const { templateAR, templateEN } = campaign;
+    return (cardLang === 'en' ? (templateEN ?? templateAR) : (templateAR ?? templateEN)) ?? null;
   });
 
+  // The server omits a variant image identical to the campaign image.
   let activeImage = $derived(activeVariant?.image || campaign?.image || '');
-  let activeFields = $derived(activeVariant?.fields || []);
+  let activeFields = $derived(activeVariant?.fields ?? []);
 
-  // Title depending on the selected card language or app locale
   let displayTitle = $derived.by(() => {
     if (!campaign) return '';
-    if (cardLang === 'en') {
-      return campaign.titleEN || campaign.title;
-    }
-    return campaign.titleAR || campaign.title;
+    return cardLang === 'en' ? campaign.titleEN || campaign.title : campaign.titleAR || campaign.title;
   });
 
+  // Discards the response of a superseded load (fast navigation between two occasions).
+  let loadToken = 0;
+
   async function loadCampaign() {
-    if (!slug) return;
+    const current = slug;
+    if (!current) return;
+
+    const token = ++loadToken;
     loading = true;
     errorMsg = '';
+    campaign = null;
+    downloadedSuccess = false;
     try {
-      campaign = await campaignsApi.getPublic(slug);
-      let currentAppLocale = 'ar';
-      locale.subscribe((l) => (currentAppLocale = l))();
-      cardLang = currentAppLocale === 'en' ? 'en' : 'ar';
-      initFieldDefaults();
-    } catch (e: any) {
-      errorMsg = e.message || $t('card.notFound');
+      const loaded = await campaignsApi.getPublic(current);
+      if (token !== loadToken) return;
+      campaign = loaded;
+      cardLang = initialCardLang(loaded);
+      resetInputs();
+    } catch (e) {
+      if (token !== loadToken) return;
+      errorMsg = translateError(e, 'card.notFound');
     } finally {
-      loading = false;
+      if (token === loadToken) loading = false;
     }
   }
 
-  function initFieldDefaults() {
-    fieldValues = {};
-    if (activeFields && activeFields.length > 0) {
-      activeFields.forEach((f) => {
-        fieldValues[f.id] = '';
-      });
-    }
+  // Both/no templates: follow the UI language; a single template dictates the card language.
+  function initialCardLang(c: Campaign): CardLang {
+    if (c.templateEN && !c.templateAR) return 'en';
+    if (c.templateAR && !c.templateEN) return 'ar';
+    return get(locale) === 'en' ? 'en' : 'ar';
+  }
+
+  // Clears typed text and makes sure every field of the active template has a (possibly empty) value.
+  function resetInputs() {
+    const cleared: Record<string, string> = {};
+    for (const f of activeFields) cleared[f.id] = '';
+    fieldValues = cleared;
+    toName = '';
+    messageText = '';
+    fromName = '';
+    isAnonymous = false;
   }
 
   $effect(() => {
-    if (slug) {
-      loadCampaign();
-    }
+    if (slug) untrack(loadCampaign);
   });
 
-  function handleCardLangChange(newLang: 'ar' | 'en') {
+  function handleCardLangChange(newLang: CardLang) {
+    if (newLang === cardLang) return;
     cardLang = newLang;
-    initFieldDefaults();
+    // Keep what was typed for fields both templates share; add empty entries for the new ones.
+    const next: Record<string, string> = {};
+    for (const f of activeFields) next[f.id] = fieldValues[f.id] ?? '';
+    fieldValues = next;
+  }
+
+  /** Labels of the fields the employee still has to fill; empty when the card can be exported. */
+  function missingFields(): string[] {
+    if (activeFields.length > 0) {
+      const missing = activeFields.filter((f) => f.required && !fieldValues[f.id]?.trim());
+      if (missing.length === 0 && activeFields.every((f) => !fieldValues[f.id]?.trim())) {
+        missing.push(activeFields[0]);
+      }
+      return missing.map((f) => f.label || f.name);
+    }
+    return toName.trim() || messageText.trim() ? [] : [$t('card.to')];
+  }
+
+  async function toPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Canvas export failed');
+    return blob;
+  }
+
+  /** Saves the PNG. Returns false when the user dismissed the iOS share sheet without saving. */
+  async function savePng(blob: Blob, filename: string): Promise<boolean> {
+    const file = new File([blob], filename, { type: 'image/png' });
+
+    // iOS Safari ignores <a download>: the share sheet ("Save Image") is the reliable way to reach Photos.
+    if (isIOS && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return true;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return false;
+        // Any other failure falls through to the regular download.
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return true;
   }
 
   async function handleDownload() {
-    if (!campaign || !cardPreviewComponent) return;
+    if (!campaign || !cardPreviewComponent || isGenerating) return;
+
+    const missing = missingFields();
+    if (missing.length > 0) {
+      showToast($t('card.requiredFields', { fields: missing.join($locale === 'ar' ? '، ' : ', ') }), 'error');
+      return;
+    }
 
     isGenerating = true;
     try {
       const canvas = cardPreviewComponent.getCanvas();
-      if (!canvas) throw new Error('Canvas not initialized');
+      const saved = await savePng(await toPngBlob(canvas), `${campaign.slug}-${cardLang}-card.png`);
+      if (!saved) return;
 
-      // 1. Trigger PNG download
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `${campaign.slug}-${cardLang}-card.png`;
-      link.href = dataUrl;
-      link.click();
-
-      // 2. Prepare submission details
-      const primaryName = fieldValues['emp_name'] || fieldValues['name'] || toName || '';
-      const primaryMsg = fieldValues['job_title'] || fieldValues['title'] || messageText || '';
-
-      const device = /iPhone|iPad|iPod/i.test(navigator.userAgent)
-        ? 'iPhone'
-        : /Android/i.test(navigator.userAgent)
-        ? 'Android'
-        : 'Desktop';
-
-      campaignsApi.submitCard(campaign.slug, {
-        from: isAnonymous ? 'Anonymous' : fromName || 'Anonymous',
-        to: primaryName,
-        message: primaryMsg,
-        lang: cardLang,
-        fieldValues: { ...fieldValues },
-        device
-      }).catch(() => {
-        // Non-blocking telemetry
-      });
+      // Anonymous telemetry for the admin analytics; never blocks or fails the export.
+      const device = isIOS ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android' : 'Desktop';
+      campaignsApi
+        .submitCard(campaign.slug, {
+          from: isAnonymous ? '' : fromName.trim(),
+          to: fieldValues['emp_name'] || fieldValues['name'] || toName,
+          message: fieldValues['job_title'] || fieldValues['title'] || messageText,
+          lang: cardLang,
+          fieldValues: { ...fieldValues },
+          device
+        })
+        .catch(() => {});
 
       downloadedSuccess = true;
       showToast($t('card.successToast'), 'success');
-      initFieldDefaults();
-      toName = '';
-      messageText = '';
-      fromName = '';
-      isAnonymous = false;
-    } catch (e: any) {
-      showToast(e.message || 'Export error', 'error');
+    } catch {
+      showToast($t('card.exportFailed'), 'error');
     } finally {
       isGenerating = false;
     }
   }
 
   function makeAnother() {
+    resetInputs();
     downloadedSuccess = false;
   }
 </script>
@@ -159,24 +212,15 @@
       <!-- Start: Back to Home -->
       <div class="header-side start">
         <a href="/" class="back-link" title={$t('app.back')}>
-          <span class="arrow">←</span>
+          <span class="arrow" aria-hidden="true">{$locale === 'ar' ? '→' : '←'}</span>
           <span class="back-text">{$t('app.back')}</span>
         </a>
       </div>
 
       <!-- Center: Clean Brand Identity -->
       <div class="header-center">
-        <a href="/" class="brand-link" title="Abdul Latif Jameel Finance">
-          <img
-            src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
-            alt="Abdul Latif Jameel Finance"
-            class="aljuf-logo light-only"
-          />
-          <img
-            src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
-            alt="Abdul Latif Jameel Finance"
-            class="aljuf-logo dark-only"
-          />
+        <a href="/" class="brand-link" title={$t('app.companyName')}>
+          <BrandLogo />
         </a>
       </div>
 
@@ -197,23 +241,31 @@
       <section class="occasion-title-box">
         <h1 class="occasion-title">{displayTitle}</h1>
 
-        <!-- Template Language Selection Tabs for Employee -->
-        <div class="template-lang-pill-wrap">
-          <button
-            class="lang-pill"
-            class:selected={cardLang === 'ar'}
-            onclick={() => handleCardLangChange('ar')}
-          >
-            العربية
-          </button>
-          <button
-            class="lang-pill"
-            class:selected={cardLang === 'en'}
-            onclick={() => handleCardLangChange('en')}
-          >
-            English
-          </button>
-        </div>
+        <!-- Template language selection (only when the occasion has both variants) -->
+        {#if hasBothTemplates}
+          <div class="template-lang-pill-wrap" role="group" aria-label={$t('card.language')}>
+            <button
+              type="button"
+              class="lang-pill"
+              class:selected={cardLang === 'ar'}
+              aria-pressed={cardLang === 'ar'}
+              lang="ar"
+              onclick={() => handleCardLangChange('ar')}
+            >
+              العربية
+            </button>
+            <button
+              type="button"
+              class="lang-pill"
+              class:selected={cardLang === 'en'}
+              aria-pressed={cardLang === 'en'}
+              lang="en"
+              onclick={() => handleCardLangChange('en')}
+            >
+              English
+            </button>
+          </div>
+        {/if}
       </section>
 
       <div class="card-box">
@@ -230,9 +282,15 @@
       </div>
 
       {#if !downloadedSuccess}
-        <div class="form-card">
-          {#if activeFields && activeFields.length > 0}
-            <!-- Dynamic Form Fields Generated from Admin Config -->
+        <form
+          class="form-card"
+          onsubmit={(e) => {
+            e.preventDefault();
+            handleDownload();
+          }}
+        >
+          {#if activeFields.length > 0}
+            <!-- Dynamic form fields generated from the admin template -->
             <div class="dynamic-inputs-wrap">
               {#each activeFields as field (field.id)}
                 <div class="input-field">
@@ -243,59 +301,46 @@
                     id={`field_${field.id}`}
                     type="text"
                     class="card-text-input"
-                    placeholder={field.placeholder || `أدخل ${field.label || field.name}...`}
+                    placeholder={field.placeholder || $t('card.enterField', { label: field.label || field.name })}
                     maxlength={field.maxChars || 80}
+                    aria-required={field.required ? 'true' : undefined}
                     bind:value={fieldValues[field.id]}
                   />
                 </div>
               {/each}
             </div>
           {:else}
-            <!-- Legacy Form Fallback -->
-            <div class="dynamic-inputs-wrap">
-              <div class="input-field">
-                <label for="to_legacy" class="field-label">{$t('card.to')}</label>
-                <input
-                  id="to_legacy"
-                  type="text"
-                  class="card-text-input"
-                  placeholder={$t('card.toPlaceholder')}
-                  bind:value={toName}
-                />
-              </div>
-              <div class="input-field">
-                <label for="msg_legacy" class="field-label">{$t('card.message')}</label>
-                <textarea
-                  id="msg_legacy"
-                  class="card-textarea"
-                  placeholder={$t('card.messagePlaceholder')}
-                  bind:value={messageText}
-                ></textarea>
-              </div>
-            </div>
+            <!-- Legacy campaigns: fixed recipient / message / sender boxes -->
+            <CardEditor
+              to={toName}
+              message={messageText}
+              from={fromName}
+              {isAnonymous}
+              ontochange={(v) => (toName = v)}
+              onmessagechange={(v) => (messageText = v)}
+              onfromchange={(v) => (fromName = v)}
+              onanonchange={(v) => (isAnonymous = v)}
+            />
           {/if}
 
           <div class="submit-wrap">
-            <Button
-              variant="primary"
-              loading={isGenerating}
-              disabled={isGenerating}
-              onclick={handleDownload}
-            >
-              <span>📥</span>
+            <Button type="submit" variant="primary" loading={isGenerating} disabled={isGenerating}>
+              <span aria-hidden="true">📥</span>
               <span>{isGenerating ? $t('card.generating') : $t('card.download')}</span>
             </Button>
           </div>
-        </div>
+        </form>
       {:else}
-        <!-- Streamlined Success Card without the annoying save banner -->
         <div class="success-box">
-          <div class="success-icon">🎉</div>
+          <div class="success-icon" aria-hidden="true">🎉</div>
           <h3>{$t('card.successToast')}</h3>
-          <p class="success-hint">تم حفظ البطاقة بنجاح على جهازك بدقة عالية</p>
+          <p class="success-hint">{$t('card.savedHint')}</p>
+          {#if isIOS}
+            <p class="success-hint">{$t('card.iosInstructions')}</p>
+          {/if}
 
           <Button variant="secondary" onclick={makeAnother}>
-            <span>🔄</span>
+            <span aria-hidden="true">🔄</span>
             <span>{$t('card.makeAnother')}</span>
           </Button>
         </div>
@@ -354,35 +399,6 @@
     text-decoration: none;
   }
 
-  .aljuf-logo {
-    height: 48px;
-    width: auto;
-    object-fit: contain;
-    transition: transform 0.2s ease;
-  }
-
-  .brand-link:hover .aljuf-logo {
-    transform: scale(1.03);
-  }
-
-  :global([data-theme="light"]) .dark-only {
-    display: none !important;
-  }
-
-  :global([data-theme="light"]) .light-only {
-    display: block !important;
-  }
-
-  :global([data-theme="dark"]) .light-only,
-  :global(:root:not([data-theme="light"])) .light-only {
-    display: none !important;
-  }
-
-  :global([data-theme="dark"]) .dark-only,
-  :global(:root:not([data-theme="light"])) .dark-only {
-    display: block !important;
-  }
-
   .nav-controls {
     display: flex;
     align-items: center;
@@ -439,11 +455,6 @@
     color: var(--text-main);
     letter-spacing: -0.4px;
     line-height: 1.3;
-  }
-
-  .occasion-subtitle {
-    font-size: 13.5px;
-    color: var(--text-dim);
   }
 
   .template-lang-pill-wrap {
@@ -512,8 +523,7 @@
     color: var(--text-muted);
   }
 
-  .card-text-input,
-  .card-textarea {
+  .card-text-input {
     width: 100%;
     padding: 12px 14px;
     background: var(--surface-2);
@@ -525,8 +535,7 @@
     transition: all 0.15s ease;
   }
 
-  .card-text-input:focus,
-  .card-textarea:focus {
+  .card-text-input:focus {
     border-color: var(--color-accent);
     box-shadow: 0 0 0 3px var(--ring-focus);
   }

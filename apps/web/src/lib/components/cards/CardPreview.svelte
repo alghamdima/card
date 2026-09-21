@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { CANVAS_W, CANVAS_H, renderCard, ensureFontsLoaded } from './canvas-renderer';
   import type { BoxesConfig, TextFieldConfig } from '../../types/campaign.types';
 
@@ -7,7 +6,7 @@
     imageSrc: string;
     boxes?: BoxesConfig | null;
     dynamicFields?: TextFieldConfig[];
-    fieldValues?: Record<string, any>;
+    fieldValues?: Record<string, string>;
     to?: string;
     from?: string;
     message?: string;
@@ -28,36 +27,35 @@
   }: Props = $props();
 
   let canvasEl: HTMLCanvasElement;
-  let bgImg: HTMLImageElement | null = null;
-  let isReady = $state(false);
+  let bgImg = $state<HTMLImageElement | null>(null);
 
-  function draw() {
-    if (!canvasEl) return;
-    renderCard(canvasEl, bgImg, boxes, { to, from, message, heading, fieldValues }, dynamicFields);
-  }
-
+  // Redraws whenever the background or any text input changes (all reads below are tracked).
   $effect(() => {
-    // Redraw whenever text, fields or values change
-    if (isReady && (to !== undefined || from !== undefined || message !== undefined || fieldValues !== undefined || dynamicFields !== undefined)) {
-      draw();
-    }
+    if (!canvasEl || !bgImg) return;
+    renderCard(canvasEl, bgImg, boxes, { to, from, message, heading, fieldValues }, dynamicFields);
   });
 
+  // Load the background image. `cancelled` discards a load that finished after the source changed.
   $effect(() => {
-    // Reload image when imageSrc changes
-    if (imageSrc && typeof window !== 'undefined') {
-      ensureFontsLoaded().then(() => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          bgImg = img;
-          isReady = true;
-          draw();
-          if (onready && canvasEl) onready(canvasEl);
-        };
-        img.src = imageSrc;
-      });
-    }
+    const src = imageSrc;
+    if (!src) return;
+
+    let cancelled = false;
+    ensureFontsLoaded().then(() => {
+      if (cancelled) return;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (cancelled) return;
+        bgImg = img;
+        onready?.(canvasEl);
+      };
+      img.src = src;
+    });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   export function getCanvas(): HTMLCanvasElement {

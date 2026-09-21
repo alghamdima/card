@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { t } from '$lib/i18n';
+  import { isAnonymousSender } from '$lib/utils/cards';
+  import { t, locale, formatDate, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { Campaign, CampaignSummary, Card, TextFieldConfig } from '$lib/types/campaign.types';
   import Button from '$lib/components/ui/Button.svelte';
@@ -8,8 +9,14 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import { showToast } from '$lib/components/ui/toast.store';
   import TemplateCanvasEditor from '$lib/components/admin/TemplateCanvasEditor.svelte';
+  import { copyText } from '$lib/utils/clipboard';
+  import { isSupportedImage, prepareArtwork } from '$lib/utils/image';
+  import { defaultFields, defaultSamples, newField } from '$lib/utils/template-defaults';
+
+  type Lang = 'ar' | 'en';
 
   let campaigns = $state<CampaignSummary[]>([]);
   let loading = $state(true);
@@ -19,9 +26,9 @@
   let showCreateModal = $state(false);
   let newTitleAR = $state('');
   let newTitleEN = $state('');
-  let newTextColor = $state('#FFFFFF');
-  let newHeadColor = $state('#FFCD00');
-  let newImageBase64 = $state('');
+  let newImage = $state('');
+  let newThumb = $state('');
+  let isProcessingImage = $state(false);
   let isSubmitting = $state(false);
 
   // Template & Position Builder Modal
@@ -29,25 +36,24 @@
   let editingCampaign = $state<Campaign | null>(null);
   let editingTitleAR = $state('');
   let editingTitleEN = $state('');
-  let activeLangTab = $state<'ar' | 'en'>('ar');
-  let activeFieldId = $state<string>('emp_name');
+  let activeLangTab = $state<Lang>('ar');
+  let activeFieldId = $state('emp_name');
 
-  // Fields and templates for the editor
-  let arImage = $state('');
-  let arFields = $state<TextFieldConfig[]>([]);
-  let enImage = $state('');
-  let enFields = $state<TextFieldConfig[]>([]);
+  // Per-language template state. An image is only sent back to the server when the admin replaced it.
+  let images = $state<Record<Lang, string>>({ ar: '', en: '' });
+  let imageDirty = $state<Record<Lang, boolean>>({ ar: false, en: false });
+  let fields = $state<Record<Lang, TextFieldConfig[]>>({ ar: [], en: [] });
+  let samples = $state<Record<Lang, Record<string, string>>>({ ar: defaultSamples('ar'), en: defaultSamples('en') });
+  let originalTemplateImages: Record<Lang, string> = { ar: '', en: '' };
+  let newArThumb = '';
 
-  // Sample values for real-time preview
-  let sampleValues = $state<Record<string, string>>({
-    emp_name: 'علاء أبوراشد | Alaa Aburashed',
-    job_title: 'مدير التواصل الداخلي | Internal Communication Manager'
-  });
+  let activeFields = $derived(fields[activeLangTab]);
 
   // Stats Modal
   let showStatsModal = $state(false);
   let activeStatsCampaign = $state<string | null>(null);
   let campaignCards = $state<Card[]>([]);
+  let statsTotal = $state(0);
   let loadingCards = $state(false);
 
   async function loadCampaigns() {
@@ -56,8 +62,8 @@
     try {
       const res = await campaignsApi.listAdmin();
       campaigns = res.campaigns || [];
-    } catch (e: any) {
-      errorMsg = e.message || 'Failed to load campaigns';
+    } catch (e) {
+      errorMsg = translateError(e);
     } finally {
       loading = false;
     }
@@ -65,88 +71,69 @@
 
   onMount(loadCampaigns);
 
-  function handleCreateFileUpload(file: File) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      newImageBase64 = (e.target?.result as string) || '';
-    };
-    reader.readAsDataURL(file);
+  /** Validate and optimize an uploaded artwork file; returns null (after a toast) when it cannot be used. */
+  async function processUpload(file: File | undefined) {
+    if (!file) return null;
+    if (!isSupportedImage(file)) {
+      showToast($t('admin.imageInvalid'), 'error');
+      return null;
+    }
+    isProcessingImage = true;
+    try {
+      return await prepareArtwork(file);
+    } catch {
+      showToast($t('admin.imageInvalid'), 'error');
+      return null;
+    } finally {
+      isProcessingImage = false;
+    }
+  }
+
+  async function handleCreateFileUpload(file: File | undefined) {
+    const prepared = await processUpload(file);
+    if (prepared) {
+      newImage = prepared.image;
+      newThumb = prepared.thumb;
+    }
+  }
+
+  function closeCreateModal() {
+    showCreateModal = false;
+    newTitleAR = '';
+    newTitleEN = '';
+    newImage = '';
+    newThumb = '';
   }
 
   async function handleCreateCampaign() {
     if (!newTitleAR.trim() && !newTitleEN.trim()) {
-      showToast($t('admin.campaignName') + ' ' + $t('errors.VALIDATION_ERROR'), 'error');
+      showToast(`${$t('admin.campaignName')}: ${$t('errors.VALIDATION_ERROR')}`, 'error');
       return;
     }
-    if (!newImageBase64) {
-      showToast($t('admin.uploadArtwork') + ' ' + $t('errors.VALIDATION_ERROR'), 'error');
+    if (!newImage) {
+      showToast(`${$t('admin.uploadArtwork')}: ${$t('errors.VALIDATION_ERROR')}`, 'error');
       return;
     }
 
     isSubmitting = true;
     try {
-      const initialFields: TextFieldConfig[] = [
-        {
-          id: 'emp_name',
-          name: 'emp_name',
-          label: 'اسم الموظف | Full Name',
-          placeholder: 'مثال: علاء أبو راشد',
-          x: 230,
-          y: 620,
-          width: 620,
-          height: 70,
-          fontSize: 47,
-          color: '#FFFFFF',
-          weight: 'bold',
-          align: 'center',
-          order: 1
-        },
-        {
-          id: 'job_title',
-          name: 'job_title',
-          label: 'المسمى الوظيفي | Job Title',
-          placeholder: 'مثال: مدير التواصل الداخلي',
-          x: 230,
-          y: 705,
-          width: 620,
-          height: 60,
-          fontSize: 34,
-          color: '#B9B9C2',
-          weight: 'regular',
-          align: 'center',
-          order: 2
-        }
-      ];
-
       const mainTitle = newTitleAR.trim() || newTitleEN.trim();
 
       const created = await campaignsApi.create({
         title: mainTitle,
         titleAR: newTitleAR.trim() || mainTitle,
         titleEN: newTitleEN.trim() || mainTitle,
-        textColor: newTextColor,
-        headColor: newHeadColor,
-        image: newImageBase64,
-        thumb: newImageBase64,
-        templateAR: {
-          image: newImageBase64,
-          fields: initialFields
-        },
-        templateEN: {
-          image: newImageBase64,
-          fields: initialFields
-        }
+        image: newImage,
+        thumb: newThumb,
+        templateAR: { image: newImage, fields: defaultFields('ar') },
+        templateEN: { image: newImage, fields: defaultFields('en') }
       });
 
-      showToast(`${$t('app.save')} (/cards/${created.slug})`, 'success');
-      showCreateModal = false;
-      newTitleAR = '';
-      newTitleEN = '';
-      newImageBase64 = '';
+      showToast($t('admin.created', { link: `/cards/${created.slug}` }), 'success');
+      closeCreateModal();
       await loadCampaigns();
-    } catch (e: any) {
-      showToast(e.message || 'Error creating campaign', 'error');
+    } catch (e) {
+      showToast(translateError(e), 'error');
     } finally {
       isSubmitting = false;
     }
@@ -160,123 +147,79 @@
       editingTitleEN = camp.titleEN || camp.title || '';
       activeLangTab = 'ar';
 
-      // Load AR template
-      arImage = camp.templateAR?.image || camp.image;
-      arFields = camp.templateAR?.fields && camp.templateAR.fields.length > 0
-        ? JSON.parse(JSON.stringify(camp.templateAR.fields))
-        : [
-            {
-              id: 'emp_name',
-              name: 'emp_name',
-              label: 'اسم الموظف',
-              x: 230,
-              y: 620,
-              width: 620,
-              height: 70,
-              fontSize: 47,
-              color: '#FFFFFF',
-              weight: 'bold',
-              align: 'center',
-              order: 1
-            },
-            {
-              id: 'job_title',
-              name: 'job_title',
-              label: 'المسمى الوظيفي',
-              x: 230,
-              y: 705,
-              width: 620,
-              height: 60,
-              fontSize: 34,
-              color: '#B9B9C2',
-              weight: 'regular',
-              align: 'center',
-              order: 2
-            }
-          ];
+      // The server omits a variant image identical to the campaign image, so fall back to it for display.
+      originalTemplateImages = { ar: camp.templateAR?.image ?? '', en: camp.templateEN?.image ?? '' };
+      images = {
+        ar: camp.templateAR?.image || camp.image,
+        en: camp.templateEN?.image || camp.image
+      };
+      imageDirty = { ar: false, en: false };
+      newArThumb = '';
 
-      // Load EN template
-      enImage = camp.templateEN?.image || camp.image;
-      enFields = camp.templateEN?.fields && camp.templateEN.fields.length > 0
-        ? JSON.parse(JSON.stringify(camp.templateEN.fields))
-        : JSON.parse(JSON.stringify(arFields));
-
+      const arFields = camp.templateAR?.fields?.length ? structuredClone(camp.templateAR.fields) : defaultFields('ar');
+      fields = {
+        ar: arFields,
+        en: camp.templateEN?.fields?.length ? structuredClone(camp.templateEN.fields) : defaultFields('en')
+      };
+      samples = { ar: defaultSamples('ar'), en: defaultSamples('en') };
       activeFieldId = arFields[0]?.id || 'emp_name';
       showBuilderModal = true;
-    } catch (e: any) {
-      showToast(e.message || 'Failed to load template', 'error');
+    } catch (e) {
+      showToast(translateError(e), 'error');
     }
   }
 
-  function handleImageTabUpload(file: File, lang: 'ar' | 'en') {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const b64 = (e.target?.result as string) || '';
-      if (lang === 'ar') arImage = b64;
-      else enImage = b64;
-    };
-    reader.readAsDataURL(file);
+  function switchTab(lang: Lang) {
+    activeLangTab = lang;
+    // Field ids differ between the two templates: keep the selection valid.
+    activeFieldId = fields[lang][0]?.id ?? '';
   }
 
-  function addField(lang: 'ar' | 'en') {
-    const list = lang === 'ar' ? arFields : enFields;
-    const newId = `field_${Date.now()}`;
-    const newField: TextFieldConfig = {
-      id: newId,
-      name: newId,
-      label: `حقل نصي جديد ${list.length + 1}`,
-      x: 250,
-      y: 780 + list.length * 30,
-      width: 580,
-      height: 65,
-      fontSize: 36,
-      color: '#FFCD00',
-      weight: 'bold',
-      align: 'center',
-      order: list.length + 1
-    };
-
-    if (lang === 'ar') {
-      arFields = [...arFields, newField];
-    } else {
-      enFields = [...enFields, newField];
-    }
-    activeFieldId = newId;
-    sampleValues[newId] = 'نص توضيحي جديد';
+  async function handleImageTabUpload(file: File | undefined, lang: Lang) {
+    const prepared = await processUpload(file);
+    if (!prepared) return;
+    images[lang] = prepared.image;
+    imageDirty[lang] = true;
+    if (lang === 'ar') newArThumb = prepared.thumb;
   }
 
-  function deleteField(lang: 'ar' | 'en', id: string) {
-    if (lang === 'ar') {
-      arFields = arFields.filter((f) => f.id !== id);
-      if (activeFieldId === id && arFields.length > 0) activeFieldId = arFields[0].id;
-    } else {
-      enFields = enFields.filter((f) => f.id !== id);
-      if (activeFieldId === id && enFields.length > 0) activeFieldId = enFields[0].id;
-    }
+  function addField(lang: Lang) {
+    const field = newField(lang, fields[lang].length);
+    fields[lang] = [...fields[lang], field];
+    samples[lang][field.id] = $t('admin.newFieldSample');
+    activeFieldId = field.id;
+  }
+
+  function deleteField(lang: Lang, id: string) {
+    fields[lang] = fields[lang].filter((f) => f.id !== id);
+    if (activeFieldId === id) activeFieldId = fields[lang][0]?.id ?? '';
   }
 
   async function handleSaveTemplate() {
     if (!editingCampaign) return;
     isSubmitting = true;
     try {
-      await campaignsApi.update(editingCampaign.slug, {
+      const payload: Partial<Campaign> = {
         titleAR: editingTitleAR.trim() || editingCampaign.title,
         titleEN: editingTitleEN.trim() || editingCampaign.title,
         templateAR: {
-          image: arImage,
-          fields: arFields
+          image: imageDirty.ar ? images.ar : originalTemplateImages.ar,
+          fields: $state.snapshot(fields.ar)
         },
         templateEN: {
-          image: enImage,
-          fields: enFields
+          image: imageDirty.en ? images.en : originalTemplateImages.en,
+          fields: $state.snapshot(fields.en)
         }
-      });
-      showToast($t('app.save'), 'success');
+      };
+      // The Arabic artwork is also the listing thumbnail.
+      if (imageDirty.ar && newArThumb) payload.thumb = newArThumb;
+
+      await campaignsApi.update(editingCampaign.slug, payload);
+      showToast($t('app.saved'), 'success');
       showBuilderModal = false;
       await loadCampaigns();
-    } catch (e: any) {
-      showToast(e.message || 'Error saving template', 'error');
+    } catch (e) {
+      showToast(translateError(e), 'error');
     } finally {
       isSubmitting = false;
     }
@@ -286,10 +229,10 @@
     if (!confirm($t('admin.confirmDelete'))) return;
     try {
       await campaignsApi.delete(slug);
-      showToast($t('app.delete'), 'info');
+      showToast($t('app.deleted'), 'info');
       await loadCampaigns();
-    } catch (e: any) {
-      showToast(e.message || 'Failed to delete campaign', 'error');
+    } catch (e) {
+      showToast(translateError(e), 'error');
     }
   }
 
@@ -297,22 +240,24 @@
     activeStatsCampaign = slug;
     showStatsModal = true;
     loadingCards = true;
+    campaignCards = [];
+    statsTotal = 0;
     try {
-      const res = await campaignsApi.getCampaignCards(slug);
+      const res = await campaignsApi.getCampaignCards(slug, { limit: 100 });
       campaignCards = res.cards || [];
-    } catch (e: any) {
-      showToast(e.message || 'Failed to load cards', 'error');
+      statsTotal = res.total;
+    } catch (e) {
+      showToast(translateError(e), 'error');
     } finally {
       loadingCards = false;
     }
   }
 
-  function copyLink(slug: string) {
-    const fullUrl = `${window.location.origin}/cards/${slug}`;
-    navigator.clipboard.writeText(fullUrl).then(() => {
-      showToast($t('app.copied'), 'success');
-    });
+  async function copyLink(slug: string) {
+    const ok = await copyText(`${window.location.origin}/cards/${slug}`);
+    showToast(ok ? $t('app.copied') : $t('app.copyFailed'), ok ? 'success' : 'error');
   }
+
 </script>
 
 <svelte:head>
@@ -327,7 +272,7 @@
     </div>
 
     <Button variant="primary" onclick={() => (showCreateModal = true)}>
-      <span>➕</span>
+      <span aria-hidden="true">➕</span>
       <span>{$t('admin.newCampaign')}</span>
     </Button>
   </div>
@@ -336,6 +281,8 @@
     <LoadingState />
   {:else if errorMsg}
     <ErrorState message={errorMsg} onretry={loadCampaigns} />
+  {:else if campaigns.length === 0}
+    <EmptyState icon="🎨" message={$t('admin.noCampaignsYet')} />
   {:else}
     <div class="table-card">
       <div class="table-wrap">
@@ -354,14 +301,20 @@
             {#each campaigns as camp (camp.slug)}
               <tr>
                 <td class="camp-title-cell">
-                  <strong>{camp.title}</strong>
+                  <strong>{$locale === 'en' ? camp.titleEN || camp.title : camp.titleAR || camp.title}</strong>
                 </td>
                 <td>
                   <div class="link-actions">
-                    <a href="/cards/{camp.slug}" target="_blank" class="slug-badge">
+                    <a href="/cards/{camp.slug}" target="_blank" rel="noopener" class="slug-badge">
                       /cards/{camp.slug}
                     </a>
-                    <button class="copy-btn" onclick={() => copyLink(camp.slug)} title={$t('app.copyLink')}>
+                    <button
+                      type="button"
+                      class="copy-btn"
+                      onclick={() => copyLink(camp.slug)}
+                      title={$t('app.copyLink')}
+                      aria-label={$t('app.copyLink')}
+                    >
                       📋
                     </button>
                   </div>
@@ -372,16 +325,16 @@
                     {camp.active ? $t('app.active') : $t('app.inactive')}
                   </span>
                 </td>
-                <td>{new Date(camp.createdAt).toLocaleDateString()}</td>
+                <td>{formatDate(camp.createdAt, $locale)}</td>
                 <td>
                   <div class="row-actions">
-                    <button class="btn-builder" onclick={() => openBuilder(camp.slug)}>
+                    <button type="button" class="btn-builder" onclick={() => openBuilder(camp.slug)}>
                       🎨 {$t('admin.templateSettings')}
                     </button>
-                    <button class="btn-text" onclick={() => openStats(camp.slug)}>
+                    <button type="button" class="btn-text" onclick={() => openStats(camp.slug)}>
                       {$t('admin.viewCards')}
                     </button>
-                    <button class="btn-text danger" onclick={() => handleDelete(camp.slug)}>
+                    <button type="button" class="btn-text danger" onclick={() => handleDelete(camp.slug)}>
                       {$t('app.delete')}
                     </button>
                   </div>
@@ -396,46 +349,49 @@
 </div>
 
 <!-- Create Campaign Modal -->
-<Modal
-  open={showCreateModal}
-  title={$t('admin.newCampaign')}
-  onclose={() => (showCreateModal = false)}
->
+<Modal open={showCreateModal} title={$t('admin.newCampaign')} onclose={closeCreateModal}>
   <div class="modal-form">
     <Input
-      label="اسم المناسبة بالعربية (Arabic Title)"
-      placeholder="مثال: تهنئة عيد الفطر المبارك 2026"
+      label={$t('admin.titleArLabel')}
+      placeholder={$t('admin.titleArPlaceholder')}
       value={newTitleAR}
+      maxlength={120}
       oninput={(e) => (newTitleAR = (e.target as HTMLInputElement).value)}
     />
 
     <Input
-      label="اسم المناسبة بالإنجليزية (English Title)"
-      placeholder="e.g. Eid Al-Fitr Greeting 2026"
+      label={$t('admin.titleEnLabel')}
+      placeholder={$t('admin.titleEnPlaceholder')}
       value={newTitleEN}
+      maxlength={120}
       oninput={(e) => (newTitleEN = (e.target as HTMLInputElement).value)}
     />
 
     <div class="upload-section">
       <label class="upload-label" for="fileInputUpload">{$t('admin.uploadArtwork')}</label>
-      <label class="drop-zone" class:has-file={!!newImageBase64}>
-        <span class="drop-icon">🖼️</span>
-        <p>{newImageBase64 ? $t('admin.imageSelected') : $t('admin.dropImage')}</p>
+      <label class="drop-zone" class:has-file={!!newImage}>
+        <span class="drop-icon" aria-hidden="true">🖼️</span>
+        <p>
+          {#if isProcessingImage}
+            {$t('admin.imageProcessing')}
+          {:else if newImage}
+            {$t('admin.imageSelected')}
+          {:else}
+            {$t('admin.dropImage')}
+          {/if}
+        </p>
         <input
           id="fileInputUpload"
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           class="hidden-input"
-          onchange={(e) => {
-            const files = (e.target as HTMLInputElement).files;
-            if (files && files[0]) handleCreateFileUpload(files[0]);
-          }}
+          onchange={(e) => handleCreateFileUpload((e.target as HTMLInputElement).files?.[0])}
         />
       </label>
 
-      {#if newImageBase64}
+      {#if newThumb}
         <div class="preview-thumb-box">
-          <img src={newImageBase64} alt="Preview" class="preview-thumb" />
+          <img src={newThumb} alt="" class="preview-thumb" />
         </div>
       {/if}
     </div>
@@ -444,7 +400,7 @@
       <Button
         variant="primary"
         loading={isSubmitting}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isProcessingImage}
         onclick={handleCreateCampaign}
       >
         {$t('admin.saveAndPublish')}
@@ -456,7 +412,7 @@
 <!-- Visual Template & Position Builder Modal -->
 <Modal
   open={showBuilderModal}
-  title={`${$t('admin.templateSettings')} - ${editingCampaign?.title || ''}`}
+  title={`${$t('admin.templateSettings')} - ${editingCampaign?.titleAR || editingCampaign?.title || ''}`}
   maxWidth="1100px"
   onclose={() => (showBuilderModal = false)}
 >
@@ -464,40 +420,48 @@
     <!-- Campaign Titles in AR & EN -->
     <div class="titles-bilingual-bar">
       <div class="title-input-item">
-        <label for="edit_title_ar">عنوان المناسبة (العربية)</label>
+        <label for="edit_title_ar">{$t('admin.titleArLabel')}</label>
         <input
           id="edit_title_ar"
           type="text"
           bind:value={editingTitleAR}
+          maxlength="120"
           class="mini-input"
-          placeholder="مثال: تهنئة عيد الفطر المبارك"
+          placeholder={$t('admin.titleArPlaceholder')}
         />
       </div>
       <div class="title-input-item">
-        <label for="edit_title_en">Occasion Title (English)</label>
+        <label for="edit_title_en">{$t('admin.titleEnLabel')}</label>
         <input
           id="edit_title_en"
           type="text"
           bind:value={editingTitleEN}
+          maxlength="120"
           class="mini-input"
-          placeholder="e.g. Eid Al-Fitr Greeting"
+          placeholder={$t('admin.titleEnPlaceholder')}
         />
       </div>
     </div>
 
     <!-- Language Switcher Tabs -->
-    <div class="lang-builder-tabs">
+    <div class="lang-builder-tabs" role="tablist">
       <button
+        type="button"
+        role="tab"
+        aria-selected={activeLangTab === 'ar'}
         class="lang-tab"
         class:active={activeLangTab === 'ar'}
-        onclick={() => (activeLangTab = 'ar')}
+        onclick={() => switchTab('ar')}
       >
         🇸🇦 {$t('admin.arabicTemplate')}
       </button>
       <button
+        type="button"
+        role="tab"
+        aria-selected={activeLangTab === 'en'}
         class="lang-tab"
         class:active={activeLangTab === 'en'}
-        onclick={() => (activeLangTab = 'en')}
+        onclick={() => switchTab('en')}
       >
         🇬🇧 {$t('admin.englishTemplate')}
       </button>
@@ -505,52 +469,48 @@
 
     <!-- Artwork Background Upload for Current Tab -->
     <div class="tab-artwork-bar">
-      <span>🖼️ {activeLangTab === 'ar' ? 'صورة القالب العربي' : 'English Template Image'}:</span>
+      <span>🖼️ {activeLangTab === 'ar' ? $t('admin.templateImageAr') : $t('admin.templateImageEn')}:</span>
       <label class="btn-change-image">
-        <span>تغيير الصورة</span>
+        <span>{isProcessingImage ? $t('admin.imageProcessing') : $t('admin.changeImage')}</span>
         <input
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           class="hidden-input"
-          onchange={(e) => {
-            const files = (e.target as HTMLInputElement).files;
-            if (files && files[0]) handleImageTabUpload(files[0], activeLangTab);
-          }}
+          onchange={(e) => handleImageTabUpload((e.target as HTMLInputElement).files?.[0], activeLangTab)}
         />
       </label>
     </div>
 
     <!-- Interactive Dual Canvas Component -->
     <TemplateCanvasEditor
-      imageSrc={activeLangTab === 'ar' ? arImage : enImage}
-      fields={activeLangTab === 'ar' ? arFields : enFields}
+      imageSrc={images[activeLangTab]}
+      fields={activeFields}
       {activeFieldId}
-      {sampleValues}
-      onfieldchange={(f) => {
-        if (activeLangTab === 'ar') arFields = f;
-        else enFields = f;
-      }}
+      sampleValues={samples[activeLangTab]}
+      onfieldchange={(f) => (fields[activeLangTab] = f)}
       onselectfield={(id) => (activeFieldId = id)}
     />
 
     <!-- Dynamic Fields Control Strip -->
     <div class="fields-control-strip">
       <div class="fields-header">
-        <h5>الحقول النصية ({activeLangTab === 'ar' ? arFields.length : enFields.length})</h5>
-        <button class="btn-add-field" onclick={() => addField(activeLangTab)}>
+        <h5>{$t('admin.textFields', { count: activeFields.length })}</h5>
+        <button type="button" class="btn-add-field" onclick={() => addField(activeLangTab)}>
           ➕ {$t('admin.addTextField')}
         </button>
       </div>
 
       <div class="fields-editor-list">
-        {#each activeLangTab === 'ar' ? arFields : enFields as field (field.id)}
+        {#each activeFields as field (field.id)}
           <div class="field-edit-card" class:selected={field.id === activeFieldId}>
             <div class="card-top-row">
               <span class="field-pill-tag">#{field.id}</span>
               <button
+                type="button"
                 class="btn-delete-field"
                 onclick={() => deleteField(activeLangTab, field.id)}
                 title={$t('admin.deleteField')}
+                aria-label={$t('admin.deleteField')}
               >
                 🗑️
               </button>
@@ -558,27 +518,28 @@
 
             <div class="form-grid">
               <div class="input-item">
-                <label for={`label_${field.id}`}>تسمية الحقل</label>
+                <label for={`label_${field.id}`}>{$t('admin.fieldLabel')}</label>
                 <input
                   id={`label_${field.id}`}
                   type="text"
                   bind:value={field.label}
+                  maxlength="100"
                   class="mini-input"
                 />
               </div>
 
               <div class="input-item">
-                <label for={`sample_${field.id}`}>القيمة التجريبية</label>
+                <label for={`sample_${field.id}`}>{$t('admin.sampleValue')}</label>
                 <input
                   id={`sample_${field.id}`}
                   type="text"
-                  bind:value={sampleValues[field.id]}
+                  bind:value={samples[activeLangTab][field.id]}
                   class="mini-input"
                 />
               </div>
 
               <div class="input-item">
-                <label for={`size_${field.id}`}>حجم الخط (px)</label>
+                <label for={`size_${field.id}`}>{$t('admin.fontSize')}</label>
                 <input
                   id={`size_${field.id}`}
                   type="number"
@@ -590,7 +551,7 @@
               </div>
 
               <div class="input-item">
-                <label for={`color_${field.id}`}>لون النص</label>
+                <label for={`color_${field.id}`}>{$t('admin.fontColor')}</label>
                 <div class="mini-color-wrap">
                   <input
                     id={`color_${field.id}`}
@@ -603,11 +564,11 @@
               </div>
 
               <div class="input-item">
-                <label for={`align_${field.id}`}>المحاذاة</label>
+                <label for={`align_${field.id}`}>{$t('admin.textAlign')}</label>
                 <select id={`align_${field.id}`} bind:value={field.align} class="mini-select">
-                  <option value="center">وسط (Center)</option>
-                  <option value="right">يمين (Right)</option>
-                  <option value="left">يسار (Left)</option>
+                  <option value="center">{$t('admin.alignCenter')}</option>
+                  <option value="right">{$t('admin.alignRight')}</option>
+                  <option value="left">{$t('admin.alignLeft')}</option>
                 </select>
               </div>
             </div>
@@ -621,7 +582,7 @@
       <Button
         variant="primary"
         loading={isSubmitting}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isProcessingImage}
         onclick={handleSaveTemplate}
       >
         💾 {$t('admin.saveTemplateAndPosition')}
@@ -633,7 +594,7 @@
 <!-- View Cards Stats Modal -->
 <Modal
   open={showStatsModal}
-  title={`${$t('admin.stats')} (${activeStatsCampaign})`}
+  title={`${$t('admin.stats')} (${activeStatsCampaign ?? ''})`}
   onclose={() => (showStatsModal = false)}
 >
   {#if loadingCards}
@@ -641,6 +602,7 @@
   {:else if campaignCards.length === 0}
     <p class="empty-text">{$t('admin.noCardsYet')}</p>
   {:else}
+    <p class="stats-note">{$t('admin.totalCount', { count: statsTotal })}</p>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
@@ -655,8 +617,8 @@
           {#each campaignCards as card (card.id)}
             <tr>
               <td><strong>{card.to || '-'}</strong></td>
-              <td class="msg-cell">{card.message || '-'}</td>
-              <td>{card.from || '-'}</td>
+              <td class="msg-cell">{card.message || card.fieldValues?.job_title || '-'}</td>
+              <td>{isAnonymousSender(card.from) ? $t('app.anonymous') : card.from}</td>
               <td>{card.date} {card.time}</td>
             </tr>
           {/each}
@@ -1052,5 +1014,24 @@
     margin-top: 20px;
     display: flex;
     justify-content: flex-end;
+  }
+
+  .empty-text {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 24px 0;
+    font-size: 14px;
+  }
+
+  .stats-note {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .msg-cell {
+    max-width: 260px;
+    overflow-wrap: anywhere;
   }
 </style>

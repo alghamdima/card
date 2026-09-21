@@ -1,19 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { t, locale } from '$lib/i18n';
+  import { t, locale, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
-  import type { CampaignSummary } from '$lib/types/campaign.types';
+  import type { PublicCampaignSummary } from '$lib/types/campaign.types';
+  import BrandLogo from '$lib/components/ui/BrandLogo.svelte';
   import LanguageSwitcher from '$lib/components/ui/LanguageSwitcher.svelte';
   import ThemeSwitcher from '$lib/components/ui/ThemeSwitcher.svelte';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
 
-  let campaigns = $state<CampaignSummary[]>([]);
+  let campaigns = $state<PublicCampaignSummary[]>([]);
   let loading = $state(true);
   let errorMsg = $state('');
 
-  function getCampaignTitle(camp: CampaignSummary, curLocale: string): string {
+  const year = new Date().getFullYear();
+
+  function getCampaignTitle(camp: PublicCampaignSummary, curLocale: string): string {
     if (curLocale === 'en') {
       return camp.titleEN || camp.title || '';
     }
@@ -26,8 +29,8 @@
     try {
       const res = await campaignsApi.listPublic();
       campaigns = res.campaigns || [];
-    } catch (e: any) {
-      errorMsg = e.message || 'Failed to load occasions';
+    } catch (e) {
+      errorMsg = translateError(e);
     } finally {
       loading = false;
     }
@@ -44,17 +47,8 @@
   <!-- Minimal Top Navigation Bar -->
   <header class="top-nav-bar">
     <div class="brand-group">
-      <a href="/" class="brand-link" title="Abdul Latif Jameel Finance">
-        <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
-          alt="Abdul Latif Jameel Finance"
-          class="aljuf-brand-logo light-only"
-        />
-        <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
-          alt="Abdul Latif Jameel Finance"
-          class="aljuf-brand-logo dark-only"
-        />
+      <a href="/" class="brand-link" title={$t('app.companyName')}>
+        <BrandLogo />
       </a>
     </div>
 
@@ -77,21 +71,18 @@
     {:else if errorMsg}
       <ErrorState message={errorMsg} onretry={loadData} />
     {:else if campaigns.length === 0}
-      <EmptyState
-        icon="💌"
-        title={$t('card.notFound')}
-        message={$t('card.noCampaigns')}
-      />
+      <EmptyState icon="💌" title={$t('card.noCampaigns')} />
     {:else}
       <div class="campaign-grid">
         {#each campaigns as camp (camp.slug)}
           <a href="/cards/{camp.slug}" class="campaign-card">
             {#if camp.thumb}
               <div class="card-thumb-wrap">
-                <img src={camp.thumb} alt={getCampaignTitle(camp, $locale)} loading="lazy" />
+                <img src={camp.thumb} alt={getCampaignTitle(camp, $locale)} loading="lazy" decoding="async" />
                 <div class="card-overlay">
                   <span class="preview-action-chip">
-                    {$locale === 'en' ? 'Create Card →' : 'صمم بطاقتك ←'}
+                    {$t('card.createCard')}
+                    <span class="chip-arrow flip-rtl" aria-hidden="true">→</span>
                   </span>
                 </div>
               </div>
@@ -114,7 +105,7 @@
   <!-- Clean Footer -->
   <footer class="page-footer">
     <div class="footer-inner">
-      <p>Abdul Latif Jameel Finance &middot; {$t('app.allRightsReserved')} 2026</p>
+      <p>{$t('app.companyName')} &middot; {$t('app.allRightsReserved')} {year}</p>
       <a href="/login" class="admin-link">{$t('nav.admin')}</a>
     </div>
   </footer>
@@ -151,39 +142,10 @@
     text-decoration: none;
   }
 
-  .aljuf-brand-logo {
-    height: 48px;
-    width: auto;
-    object-fit: contain;
-    transition: transform 0.2s ease;
-  }
-
-  .brand-link:hover .aljuf-brand-logo {
-    transform: scale(1.02);
-  }
-
   .controls-group {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  :global([data-theme="light"]) .dark-only {
-    display: none !important;
-  }
-
-  :global([data-theme="light"]) .light-only {
-    display: block !important;
-  }
-
-  :global([data-theme="dark"]) .light-only,
-  :global(:root:not([data-theme="light"])) .light-only {
-    display: none !important;
-  }
-
-  :global([data-theme="dark"]) .dark-only,
-  :global(:root:not([data-theme="light"])) .dark-only {
-    display: block !important;
   }
 
   /* Hero Section */
@@ -357,5 +319,9 @@
 
   .admin-link:hover {
     color: var(--color-accent);
+  }
+
+  .chip-arrow {
+    display: inline-block;
   }
 </style>

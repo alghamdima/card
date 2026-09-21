@@ -15,8 +15,8 @@
   type="button"
   class="icon-btn theme-toggle-btn"
   onclick={cycleTheme}
-  title={`الثيم: ${$theme === 'dark' ? 'داكن' : $theme === 'light' ? 'فاتح' : 'تلقائي'} (اضغط للتبديل)`}
-  aria-label="Toggle theme"
+  title={`${$t(`theme.${$theme}`)} — ${$t('app.themeToggle')}`}
+  aria-label={$t('app.themeToggle')}
 >
   {#if $theme === 'dark'}
     <!-- Moon icon -->

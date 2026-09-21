@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { toggleLocale, locale } from '../../i18n';
+  import { toggleLocale, locale, t } from '../../i18n';
 </script>
 
 <button
   type="button"
   class="icon-btn lang-btn"
   onclick={toggleLocale}
-  title={$locale === 'ar' ? 'Switch to English' : 'التحويل إلى العربية'}
-  aria-label="Switch Language"
+  title={$t('app.switchLang')}
+  aria-label={$t('app.switchLang')}
+  lang={$locale === 'ar' ? 'en' : 'ar'}
 >
   <span class="lang-code">{$locale === 'ar' ? 'EN' : 'ع'}</span>
 </button>

@@ -57,7 +57,8 @@ export interface Campaign {
   createdAt: string;
 }
 
-export interface CampaignSummary {
+/** Anonymous-facing listing entry: no participation counters. */
+export interface PublicCampaignSummary {
   slug: string;
   title: string;
   titleAR?: string;
@@ -66,9 +67,12 @@ export interface CampaignSummary {
   textColor: string;
   headColor: string;
   thumb?: string;
+  createdAt: string;
+}
+
+export interface CampaignSummary extends PublicCampaignSummary {
   active: boolean;
   totalCards: number;
-  createdAt: string;
 }
 
 export interface Card {
@@ -79,11 +83,19 @@ export interface Card {
   message: string;
   heading?: string;
   lang?: string;
-  fieldValues?: Record<string, any>;
+  fieldValues?: Record<string, string>;
   device: string;
   date: string;
   time: string;
   createdAt: string;
+}
+
+export interface CardsPage {
+  slug?: string;
+  cards: Card[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface DashboardStats {

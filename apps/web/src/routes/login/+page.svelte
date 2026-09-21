@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { t, locale } from '$lib/i18n';
-  import { authStore, isAuthenticated } from '$lib/stores/auth.store';
+  import { t, locale, translateError } from '$lib/i18n';
+  import { authStore } from '$lib/stores/auth.store';
+  import BrandLogo from '$lib/components/ui/BrandLogo.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import LanguageSwitcher from '$lib/components/ui/LanguageSwitcher.svelte';
@@ -13,13 +14,13 @@
   let errorMsg = $state('');
 
   onMount(async () => {
-    const ok = await authStore.checkAuth();
-    if (ok) {
+    if (await authStore.checkAuth()) {
       goto('/admin/dashboard');
     }
   });
 
   async function handleLogin() {
+    if (loading) return;
     if (!password) {
       errorMsg = $t('errors.VALIDATION_ERROR');
       return;
@@ -30,18 +31,10 @@
     try {
       await authStore.login(password);
       goto('/admin/dashboard');
-    } catch (e: any) {
-      errorMsg = e.code === 'INVALID_CREDENTIALS' 
-        ? $t('login.invalidPassword')
-        : (e.message || $t('app.error'));
+    } catch (e) {
+      errorMsg = (e as { code?: string })?.code === 'INVALID_CREDENTIALS' ? $t('login.invalidPassword') : translateError(e);
     } finally {
       loading = false;
-    }
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      handleLogin();
     }
   }
 </script>
@@ -52,7 +45,7 @@
 
 <div class="login-page">
   <div class="top-bar">
-    <a href="/" class="back-link">← {$t('app.back')}</a>
+    <a href="/" class="back-link">{$locale === 'ar' ? '→' : '←'} {$t('app.back')}</a>
     <div class="controls-wrap">
       <ThemeSwitcher />
       <LanguageSwitcher />
@@ -62,24 +55,22 @@
   <div class="login-card">
     <div class="card-head">
       <div class="brand-badge-login">
-        <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
-          alt="Abdul Latif Jameel Finance"
-          class="login-brand-logo light-only"
-        />
-        <img
-          src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
-          alt="Abdul Latif Jameel Finance"
-          class="login-brand-logo dark-only"
-        />
+        <BrandLogo height={54} />
       </div>
       <h2>{$t('login.title')}</h2>
       <p>{$t('login.subtitle')}</p>
     </div>
 
-    <form class="login-form" onsubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+    <form
+      class="login-form"
+      onsubmit={(e) => {
+        e.preventDefault();
+        handleLogin();
+      }}
+    >
       <Input
         type="password"
+        autocomplete="current-password"
         label={$t('login.password')}
         placeholder={$t('login.passwordPlaceholder')}
         value={password}
@@ -87,12 +78,7 @@
         oninput={(e) => (password = (e.target as HTMLInputElement).value)}
       />
 
-      <Button
-        type="submit"
-        variant="primary"
-        {loading}
-        disabled={loading}
-      >
+      <Button type="submit" variant="primary" {loading} disabled={loading}>
         {$t('login.submit')}
       </Button>
     </form>
@@ -157,40 +143,6 @@
     gap: 6px;
   }
 
-  .brand-badge-login {
-    margin-bottom: 8px;
-  }
-
-  .login-brand-logo {
-    height: 54px;
-    width: auto;
-    object-fit: contain;
-  }
-
-  :global([data-theme="light"]) .dark-only {
-    display: none !important;
-  }
-
-  :global([data-theme="light"]) .light-only {
-    display: block !important;
-  }
-
-  :global([data-theme="dark"]) .light-only,
-  :global(:root:not([data-theme="light"])) .light-only {
-    display: none !important;
-  }
-
-  :global([data-theme="dark"]) .dark-only,
-  :global(:root:not([data-theme="light"])) .dark-only {
-    display: block !important;
-  }
-
-  .icon {
-    font-size: 32px;
-    display: inline-block;
-    margin-bottom: 8px;
-  }
-
   h2 {
     font-size: 20px;
     font-weight: 800;
@@ -212,5 +164,9 @@
   .login-form :global(button) {
     width: 100%;
     margin-top: 8px;
+  }
+
+  .brand-badge-login {
+    margin-bottom: 8px;
   }
 </style>

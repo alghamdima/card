@@ -2,7 +2,7 @@
   import { toasts } from './toast.store';
 </script>
 
-<div class="toast-container" aria-live="polite">
+<div class="toast-container" role="status" aria-live="polite">
   {#each $toasts as item (item.id)}
     <div class="toast toast-{item.type || 'success'}">
       <span>{item.text}</span>

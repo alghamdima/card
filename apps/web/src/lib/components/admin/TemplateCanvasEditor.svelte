@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { t } from '../../i18n';
   import { CANVAS_W, CANVAS_H, renderCard, ensureFontsLoaded } from '../cards/canvas-renderer';
   import type { TextFieldConfig } from '../../types/campaign.types';
@@ -13,274 +12,214 @@
     onselectfield: (id: string) => void;
   }
 
-  let {
-    imageSrc,
-    fields,
-    activeFieldId,
-    sampleValues,
-    onfieldchange,
-    onselectfield
-  }: Props = $props();
+  let { imageSrc, fields, activeFieldId, sampleValues, onfieldchange, onselectfield }: Props = $props();
+
+  const HANDLE_HIT_RADIUS = 30;
+  const MIN_WIDTH = 100;
+  const MIN_HEIGHT = 40;
+
+  type Corner = 'tl' | 'tr' | 'bl' | 'br';
 
   let interactiveCanvasEl: HTMLCanvasElement;
   let previewCanvasEl: HTMLCanvasElement;
-  let bgImg: HTMLImageElement | null = null;
-  let isReady = $state(false);
+  let bgImg = $state<HTMLImageElement | null>(null);
 
-  // Dragging & Resizing interaction state
-  let isDragging = $state(false);
-  let isResizing = $state(false);
-  let resizeHandle = $state<string | null>(null);
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let initialFieldX = 0;
-  let initialFieldY = 0;
-  let initialFieldW = 0;
-  let initialFieldH = 0;
+  // Drag / resize interaction state (plain variables: they never drive rendering).
+  let mode: 'idle' | 'drag' | 'resize' = 'idle';
+  let resizeCorner: Corner | null = null;
+  let targetId = ''; // the field being dragged or resized
+  let dragStart = { x: 0, y: 0 };
+  let initial = { x: 0, y: 0, w: 0, h: 0 };
 
-  function getActiveField(): TextFieldConfig | undefined {
-    return fields.find((f) => f.id === activeFieldId) || fields[0];
-  }
+  // A stale activeFieldId (for example after switching language tabs) falls back to the first field.
+  let selectedId = $derived(fields.some((f) => f.id === activeFieldId) ? activeFieldId : (fields[0]?.id ?? ''));
 
   function redrawAll() {
     if (!interactiveCanvasEl || !previewCanvasEl || !bgImg) return;
 
-    // 1. Draw Live Preview
+    // 1. Live preview: exactly what an employee will get
     renderCard(previewCanvasEl, bgImg, null, { fieldValues: sampleValues }, fields);
 
-    // 2. Draw Interactive Canvas with bounding boxes & handles
+    // 2. Interactive canvas: artwork + field boxes + resize handles
     const ctx = interactiveCanvasEl.getContext('2d');
     if (!ctx) return;
 
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    if (bgImg.complete && bgImg.naturalWidth) {
-      ctx.drawImage(bgImg, 0, 0, CANVAS_W, CANVAS_H);
-    }
+    ctx.drawImage(bgImg, 0, 0, CANVAS_W, CANVAS_H);
 
-    // Draw non-active boxes
-    fields.forEach((field) => {
-      const isActive = field.id === activeFieldId;
+    for (const field of fields) {
+      const isActive = field.id === selectedId;
       ctx.save();
       ctx.strokeStyle = isActive ? '#FFCD00' : 'rgba(255, 205, 0, 0.4)';
       ctx.lineWidth = isActive ? 5 : 2;
       ctx.fillStyle = isActive ? 'rgba(255, 205, 0, 0.12)' : 'rgba(0, 0, 0, 0.2)';
 
-      // Draw rounded rectangle for pill/box
-      const r = Math.min(20, field.height / 2);
       ctx.beginPath();
-      ctx.roundRect(field.x, field.y, field.width, field.height, r);
+      ctx.roundRect(field.x, field.y, field.width, field.height, Math.min(20, field.height / 2));
       ctx.fill();
       ctx.stroke();
 
-      // Label on top-left of box
+      // Field name above the box
       ctx.font = '22px sans-serif';
       ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'start';
       ctx.fillText(field.label || field.name, field.x + 12, Math.max(28, field.y - 8));
 
-      // Draw sample text inside interactive canvas
-      const textVal = sampleValues[field.id] || field.label;
+      // Sample text inside the box
       ctx.font = `${field.fontSize || 38}px sans-serif`;
       ctx.fillStyle = field.color || '#FFFFFF';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(textVal, field.x + field.width / 2, field.y + field.height / 2);
+      ctx.fillText(sampleValues[field.id] || field.label, field.x + field.width / 2, field.y + field.height / 2);
 
-      // If active, draw 4 yellow corner handles
       if (isActive) {
-        const handleSize = 24;
         ctx.fillStyle = '#FFCD00';
         ctx.strokeStyle = '#2B0A3D';
         ctx.lineWidth = 4;
-
-        const handles = [
-          { x: field.x, y: field.y }, // top-left
-          { x: field.x + field.width, y: field.y }, // top-right
-          { x: field.x, y: field.y + field.height }, // bottom-left
-          { x: field.x + field.width, y: field.y + field.height } // bottom-right
-        ];
-
-        handles.forEach((h) => {
+        for (const corner of cornersOf(field)) {
           ctx.beginPath();
-          ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
+          ctx.arc(corner.x, corner.y, 12, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
-        });
+        }
       }
       ctx.restore();
-    });
+    }
   }
 
+  function cornersOf(f: TextFieldConfig): { name: Corner; x: number; y: number }[] {
+    return [
+      { name: 'tl', x: f.x, y: f.y },
+      { name: 'tr', x: f.x + f.width, y: f.y },
+      { name: 'bl', x: f.x, y: f.y + f.height },
+      { name: 'br', x: f.x + f.width, y: f.y + f.height }
+    ];
+  }
+
+  function contains(f: TextFieldConfig, p: { x: number; y: number }): boolean {
+    return p.x >= f.x && p.x <= f.x + f.width && p.y >= f.y && p.y <= f.y + f.height;
+  }
+
+  // Redraw when fields, samples, selection or the background change.
   $effect(() => {
-    if (isReady && fields && activeFieldId && sampleValues) {
-      redrawAll();
-    }
+    if (bgImg) redrawAll();
   });
 
+  // Load the background; `cancelled` drops a load that finishes after the image was replaced.
   $effect(() => {
-    if (imageSrc && typeof window !== 'undefined') {
-      ensureFontsLoaded().then(() => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          bgImg = img;
-          isReady = true;
-          redrawAll();
-        };
-        img.src = imageSrc;
-      });
-    }
+    const src = imageSrc;
+    if (!src) return;
+
+    let cancelled = false;
+    ensureFontsLoaded().then(() => {
+      if (cancelled) return;
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) bgImg = img;
+      };
+      img.src = src;
+    });
+    return () => {
+      cancelled = true;
+    };
   });
 
-  function getCanvasCoords(e: MouseEvent | Touch): { x: number; y: number } {
+  function toCanvasCoords(e: PointerEvent): { x: number; y: number } {
     const rect = interactiveCanvasEl.getBoundingClientRect();
-    const scaleX = CANVAS_W / rect.width;
-    const scaleY = CANVAS_H / rect.height;
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
+      x: ((e.clientX - rect.left) * CANVAS_W) / rect.width,
+      y: ((e.clientY - rect.top) * CANVAS_H) / rect.height
     };
   }
 
-  function handlePointerDown(e: MouseEvent) {
-    const coords = getCanvasCoords(e);
-    const active = getActiveField();
+  function beginDrag(field: TextFieldConfig, p: { x: number; y: number }) {
+    mode = 'drag';
+    targetId = field.id;
+    dragStart = p;
+    initial = { x: field.x, y: field.y, w: field.width, h: field.height };
+  }
+
+  function handlePointerDown(e: PointerEvent) {
+    e.preventDefault();
+    const p = toCanvasCoords(e);
+    const active = fields.find((f) => f.id === selectedId);
 
     if (active) {
-      // Check handles first
-      const handleRadius = 30;
-      const corners = [
-        { name: 'tl', x: active.x, y: active.y },
-        { name: 'tr', x: active.x + active.width, y: active.y },
-        { name: 'bl', x: active.x, y: active.y + active.height },
-        { name: 'br', x: active.x + active.width, y: active.y + active.height }
-      ];
-
-      for (const corner of corners) {
-        const dist = Math.hypot(coords.x - corner.x, coords.y - corner.y);
-        if (dist <= handleRadius) {
-          isResizing = true;
-          resizeHandle = corner.name;
-          dragStartX = coords.x;
-          dragStartY = coords.y;
-          initialFieldX = active.x;
-          initialFieldY = active.y;
-          initialFieldW = active.width;
-          initialFieldH = active.height;
-          return;
-        }
+      const corner = cornersOf(active).find((c) => Math.hypot(p.x - c.x, p.y - c.y) <= HANDLE_HIT_RADIUS);
+      if (corner) {
+        mode = 'resize';
+        targetId = active.id;
+        resizeCorner = corner.name;
+        dragStart = p;
+        initial = { x: active.x, y: active.y, w: active.width, h: active.height };
+        interactiveCanvasEl.setPointerCapture(e.pointerId);
+        return;
       }
-
-      // Check if inside active box for moving
-      if (
-        coords.x >= active.x &&
-        coords.x <= active.x + active.width &&
-        coords.y >= active.y &&
-        coords.y <= active.y + active.height
-      ) {
-        isDragging = true;
-        dragStartX = coords.x;
-        dragStartY = coords.y;
-        initialFieldX = active.x;
-        initialFieldY = active.y;
+      if (contains(active, p)) {
+        beginDrag(active, p);
+        interactiveCanvasEl.setPointerCapture(e.pointerId);
         return;
       }
     }
 
-    // Check if clicked another field
-    for (const f of fields) {
-      if (
-        coords.x >= f.x &&
-        coords.x <= f.x + f.width &&
-        coords.y >= f.y &&
-        coords.y <= f.y + f.height
-      ) {
-        onselectfield(f.id);
-        isDragging = true;
-        dragStartX = coords.x;
-        dragStartY = coords.y;
-        initialFieldX = f.x;
-        initialFieldY = f.y;
-        return;
-      }
+    // Clicking another field selects it and starts dragging it.
+    const hit = fields.find((f) => contains(f, p));
+    if (hit) {
+      onselectfield(hit.id);
+      beginDrag(hit, p);
+      interactiveCanvasEl.setPointerCapture(e.pointerId);
     }
   }
 
-  function handlePointerMove(e: MouseEvent) {
-    if (!isDragging && !isResizing) return;
-    const coords = getCanvasCoords(e);
-    const dx = coords.x - dragStartX;
-    const dy = coords.y - dragStartY;
-    const active = getActiveField();
-    if (!active) return;
+  function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+  }
 
-    if (isDragging) {
-      const updated = fields.map((f) => {
-        if (f.id === active.id) {
-          return {
-            ...f,
-            x: Math.round(Math.max(0, Math.min(CANVAS_W - f.width, initialFieldX + dx))),
-            y: Math.round(Math.max(0, Math.min(CANVAS_H - f.height, initialFieldY + dy)))
-          };
-        }
-        return f;
-      });
-      onfieldchange(updated);
-    } else if (isResizing && resizeHandle) {
-      let newX = initialFieldX;
-      let newY = initialFieldY;
-      let newW = initialFieldW;
-      let newH = initialFieldH;
+  function handlePointerMove(e: PointerEvent) {
+    if (mode === 'idle') return;
+    const p = toCanvasCoords(e);
+    const dx = p.x - dragStart.x;
+    const dy = p.y - dragStart.y;
 
-      if (resizeHandle === 'br') {
-        newW = Math.max(100, Math.min(CANVAS_W - initialFieldX, initialFieldW + dx));
-        newH = Math.max(40, Math.min(CANVAS_H - initialFieldY, initialFieldH + dy));
-      } else if (resizeHandle === 'bl') {
-        const proposedX = initialFieldX + dx;
-        newW = Math.max(100, initialFieldW - dx);
-        newX = Math.max(0, proposedX);
-        newH = Math.max(40, initialFieldH + dy);
-      } else if (resizeHandle === 'tr') {
-        newW = Math.max(100, initialFieldW + dx);
-        const proposedY = initialFieldY + dy;
-        newH = Math.max(40, initialFieldH - dy);
-        newY = Math.max(0, proposedY);
-      } else if (resizeHandle === 'tl') {
-        newX = Math.max(0, initialFieldX + dx);
-        newY = Math.max(0, initialFieldY + dy);
-        newW = Math.max(100, initialFieldW - dx);
-        newH = Math.max(40, initialFieldH - dy);
-      }
+    const patch = mode === 'drag' ? dragPatch(dx, dy) : resizePatch(dx, dy);
+    onfieldchange(fields.map((f) => (f.id === targetId ? { ...f, ...patch } : f)));
+  }
 
-      const updated = fields.map((f) => {
-        if (f.id === active.id) {
-          return {
-            ...f,
-            x: Math.round(newX),
-            y: Math.round(newY),
-            width: Math.round(newW),
-            height: Math.round(newH)
-          };
-        }
-        return f;
-      });
-      onfieldchange(updated);
-    }
+  function dragPatch(dx: number, dy: number) {
+    return {
+      x: Math.round(clamp(initial.x + dx, 0, CANVAS_W - initial.w)),
+      y: Math.round(clamp(initial.y + dy, 0, CANVAS_H - initial.h))
+    };
+  }
+
+  // Resizing keeps the opposite corner anchored and never lets the box leave the card or collapse.
+  function resizePatch(dx: number, dy: number) {
+    const right = initial.x + initial.w;
+    const bottom = initial.y + initial.h;
+    const movesLeft = resizeCorner === 'tl' || resizeCorner === 'bl';
+    const movesTop = resizeCorner === 'tl' || resizeCorner === 'tr';
+
+    const x = movesLeft ? clamp(initial.x + dx, 0, right - MIN_WIDTH) : initial.x;
+    const y = movesTop ? clamp(initial.y + dy, 0, bottom - MIN_HEIGHT) : initial.y;
+    const width = movesLeft ? right - x : clamp(initial.w + dx, MIN_WIDTH, CANVAS_W - initial.x);
+    const height = movesTop ? bottom - y : clamp(initial.h + dy, MIN_HEIGHT, CANVAS_H - initial.y);
+
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
   }
 
   function handlePointerUp() {
-    isDragging = false;
-    isResizing = false;
-    resizeHandle = null;
+    mode = 'idle';
+    resizeCorner = null;
   }
 </script>
 
-<svelte:window onmousemove={handlePointerMove} onmouseup={handlePointerUp} />
+<svelte:window onpointermove={handlePointerMove} onpointerup={handlePointerUp} onpointercancel={handlePointerUp} />
 
 <div class="dual-canvas-container">
   <div class="canvas-panel">
     <div class="panel-header">
       <span class="indicator interactive"></span>
-      <h4>{$t('admin.dragBoxOntoPill')}</h4>
+      <h4>{$t('admin.positionEditor')}</h4>
     </div>
     <div class="canvas-box">
       <canvas
@@ -288,7 +227,7 @@
         width={CANVAS_W}
         height={CANVAS_H}
         class="editor-canvas"
-        onmousedown={handlePointerDown}
+        onpointerdown={handlePointerDown}
       ></canvas>
     </div>
   </div>
@@ -375,6 +314,7 @@
     height: 100%;
     display: block;
     cursor: crosshair;
+    touch-action: none; /* pointer events drive drag/resize instead of scrolling the page */
   }
 
   .preview-canvas {

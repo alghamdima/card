@@ -8,8 +8,11 @@ export interface ToastMessage {
 
 export const toasts = writable<ToastMessage[]>([]);
 
+let nextId = 0;
+
 export function showToast(text: string, type: 'success' | 'error' | 'info' = 'success', duration = 3000) {
-  const id = Date.now();
+  // A counter, not Date.now(): two toasts in the same millisecond used to share a key.
+  const id = ++nextId;
   toasts.update((all) => [...all, { id, text, type }]);
 
   setTimeout(() => {

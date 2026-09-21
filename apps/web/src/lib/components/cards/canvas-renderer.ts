@@ -2,49 +2,56 @@ import type { BoxesConfig, BoxItem } from '../../types/campaign.types';
 
 export const CANVAS_W = 1080;
 export const CANVAS_H = 1350;
-const SEP = ' \u2014 ';
+const SEP = ' — ';
 const SECTION_GAP = 0.7;
+
+// Brand fonts are optional files served from /fonts (they are licensed, so they are not in the repo).
+// Each face is registered with the weight the canvas font shorthand asks for, otherwise the browser would fake-bold it.
+const BRAND_FACES = [
+  { family: 'LumaSemiBold', url: '/fonts/Luma-SemiBold.ttf', weight: '700' },
+  { family: 'LumaRegular', url: '/fonts/Luma-Regular.ttf', weight: '400' },
+  { family: 'KarbonBold', url: '/fonts/Karbon-Bold.ttf', weight: '700' },
+  { family: 'KarbonRegular', url: '/fonts/Karbon-Regular.ttf', weight: '400' }
+];
+
+// Web fonts the page already links to. Canvas text does not trigger their download, so load them explicitly.
+const WEB_FONT_SPECS = [
+  '700 40px Tajawal',
+  '400 40px Tajawal',
+  '700 40px "Instrument Sans"',
+  '400 40px "Instrument Sans"'
+];
 
 let fontsLoadedPromise: Promise<void> | null = null;
 
-export async function ensureFontsLoaded(): Promise<void> {
-  if (typeof window === 'undefined') return;
+export function ensureFontsLoaded(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
   if (fontsLoadedPromise) return fontsLoadedPromise;
 
-  fontsLoadedPromise = (async () => {
-    try {
-      const fonts = [
-        new FontFace('LumaSemiBold', 'url(/fonts/Luma-SemiBold.ttf)'),
-        new FontFace('LumaRegular', 'url(/fonts/Luma-Regular.ttf)'),
-        new FontFace('KarbonBold', 'url(/fonts/Karbon-Bold.ttf)'),
-        new FontFace('KarbonRegular', 'url(/fonts/Karbon-Regular.ttf)')
-      ];
-
-      const loaded = await Promise.all(fonts.map((f) => f.load()));
-      loaded.forEach((f) => document.fonts.add(f));
-    } catch (e) {
-      console.warn('Custom font load notice, falling back to system fonts:', e);
-    }
-  })();
+  // allSettled: a missing brand font must not prevent the others (or the fallbacks) from loading.
+  fontsLoadedPromise = Promise.allSettled([
+    ...BRAND_FACES.map(async ({ family, url, weight }) => {
+      const face = new FontFace(family, `url(${url})`, { weight });
+      document.fonts.add(await face.load());
+    }),
+    ...WEB_FONT_SPECS.map((spec) => document.fonts.load(spec, 'اAa'))
+  ]).then(() => undefined);
 
   return fontsLoadedPromise;
 }
 
 export function isArabic(text: string): boolean {
-  return /[\u0600-\u06FF]/.test(text || '');
+  return /[؀-ۿ]/.test(text || '');
 }
 
 function fontFor(text: string, size: number, weight: 'bold' | 'regular'): string {
-  const ar = isArabic(text);
-  const fam =
-    weight === 'bold'
-      ? ar
-        ? 'LumaSemiBold, Tajawal, sans-serif'
-        : 'KarbonBold, Instrument Sans, sans-serif'
-      : ar
-      ? 'LumaRegular, Tajawal, sans-serif'
-      : 'KarbonRegular, Instrument Sans, sans-serif';
-  return `${size}px "${fam}"`;
+  const arabic = isArabic(text);
+  const bold = weight === 'bold';
+  // A font shorthand takes a comma-separated family list, so it must NOT be wrapped in one pair of quotes.
+  const families = arabic
+    ? `${bold ? 'LumaSemiBold' : 'LumaRegular'}, Tajawal, sans-serif`
+    : `${bold ? 'KarbonBold' : 'KarbonRegular'}, "Instrument Sans", sans-serif`;
+  return `${bold ? 700 : 400} ${size}px ${families}`;
 }
 
 function wrapWithPrefix(ctx: CanvasRenderingContext2D, text: string, maxW: number, firstLineIndent: number): string[] {
@@ -67,11 +74,12 @@ function wrapWithPrefix(ctx: CanvasRenderingContext2D, text: string, maxW: numbe
     }
     if (ctx.measureText(w).width > limit) {
       let piece = '';
-      for (let j = 0; j < w.length; j++) {
-        const t2 = piece + w[j];
+      // Iterate by code point so emoji and other astral characters are never split in half.
+      for (const ch of Array.from(w)) {
+        const t2 = piece + ch;
         if (ctx.measureText(t2).width > limit && piece) {
           lines.push(piece);
-          piece = w[j];
+          piece = ch;
           limit = maxW;
         } else {
           piece = t2;

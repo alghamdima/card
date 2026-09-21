@@ -1,92 +1,114 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { t, locale } from '$lib/i18n';
+  import { onDestroy, onMount } from 'svelte';
+  import { t, locale, formatTime, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
-  import type { CampaignAnalytics, Card } from '$lib/types/campaign.types';
+  import type { CampaignAnalytics, Card, DashboardStats as Stats } from '$lib/types/campaign.types';
+  import Pager from '$lib/components/ui/Pager.svelte';
+  import DashboardStats from '$lib/components/admin/DashboardStats.svelte';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import { showToast } from '$lib/components/ui/toast.store';
 
+  const PAGE_SIZE = 50;
+  const SEARCH_DEBOUNCE_MS = 300;
+
   let analyticsCampaigns = $state<CampaignAnalytics[]>([]);
-  let activeTabSlug = $state<string>('');
+  let stats = $state<Stats | null>(null);
+  let activeTabSlug = $state('');
   let loading = $state(true);
   let errorMsg = $state('');
-  let lastUpdatedTime = $state('');
+  let lastUpdated = $state<Date | null>(null);
 
-  // Selected Campaign details & cards
+  // Cards of the selected campaign: one server-side page at a time, filtered by the search box.
   let campaignCards = $state<Card[]>([]);
+  let cardsTotal = $state(0);
+  let offset = $state(0);
   let loadingCards = $state(false);
   let searchQuery = $state('');
+  let exporting = $state(false);
 
-  let filteredCards = $derived.by(() => {
-    if (!searchQuery.trim()) return campaignCards;
-    const q = searchQuery.toLowerCase();
-    return campaignCards.filter(
-      (c) =>
-        (c.to && c.to.toLowerCase().includes(q)) ||
-        (c.from && c.from.toLowerCase().includes(q)) ||
-        (c.message && c.message.toLowerCase().includes(q))
-    );
-  });
+  let activeCampaign = $derived(analyticsCampaigns.find((c) => c.slug === activeTabSlug) ?? analyticsCampaigns[0]);
 
-  let activeCampaign = $derived.by(() => {
-    return analyticsCampaigns.find((c) => c.slug === activeTabSlug) || analyticsCampaigns[0];
-  });
-
-  function updateClock() {
-    const now = new Date();
-    lastUpdatedTime = now.toLocaleTimeString('en-US', { hour12: false });
-  }
+  // Ignores the response of a superseded request (fast tab switching / typing).
+  let cardsRequest = 0;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   async function loadData() {
     loading = true;
     errorMsg = '';
-    updateClock();
     try {
-      const res = await campaignsApi.getAnalyticsOverview();
-      analyticsCampaigns = res.campaigns || [];
-      if (analyticsCampaigns.length > 0 && !activeTabSlug) {
-        activeTabSlug = analyticsCampaigns[0].slug;
+      // The global counters are a nice-to-have: their failure must not hide the per-campaign analytics.
+      const [overview, dashboard] = await Promise.all([
+        campaignsApi.getAnalyticsOverview(),
+        campaignsApi.getDashboardStats().catch(() => null)
+      ]);
+      analyticsCampaigns = overview.campaigns || [];
+      stats = dashboard;
+      lastUpdated = new Date();
+
+      if (!analyticsCampaigns.some((c) => c.slug === activeTabSlug)) {
+        activeTabSlug = analyticsCampaigns[0]?.slug ?? '';
       }
-      if (activeTabSlug) {
-        await loadCampaignCards(activeTabSlug);
-      }
-    } catch (e: any) {
-      errorMsg = e.message || 'Failed to load analytics';
+      if (activeTabSlug) await loadCampaignCards(0);
+    } catch (e) {
+      errorMsg = translateError(e);
     } finally {
       loading = false;
     }
   }
 
-  async function loadCampaignCards(slug: string) {
+  async function loadCampaignCards(newOffset: number) {
+    const slug = activeTabSlug;
+    if (!slug) return;
+
+    const request = ++cardsRequest;
     loadingCards = true;
     try {
-      const res = await campaignsApi.getCampaignCards(slug);
+      const res = await campaignsApi.getCampaignCards(slug, {
+        limit: PAGE_SIZE,
+        offset: newOffset,
+        q: searchQuery.trim()
+      });
+      if (request !== cardsRequest) return;
       campaignCards = res.cards || [];
-    } catch (e: any) {
-      showToast('Error loading cards: ' + e.message, 'error');
+      cardsTotal = res.total;
+      offset = newOffset;
+    } catch (e) {
+      if (request !== cardsRequest) return;
+      showToast(translateError(e), 'error');
     } finally {
-      loadingCards = false;
+      if (request === cardsRequest) loadingCards = false;
     }
   }
 
   async function handleTabChange(slug: string) {
+    if (slug === activeTabSlug) return;
     activeTabSlug = slug;
+    campaignCards = [];
     searchQuery = '';
-    await loadCampaignCards(slug);
+    clearTimeout(searchTimer);
+    await loadCampaignCards(0);
   }
 
-  function handleExportCsv() {
-    if (!activeTabSlug) return;
-    const url = campaignsApi.getExportUrl(activeTabSlug);
-    window.open(url, '_blank');
+  function handleSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadCampaignCards(0), SEARCH_DEBOUNCE_MS);
   }
 
-  onMount(() => {
-    loadData();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
-  });
+  async function handleExportCsv() {
+    if (!activeTabSlug || exporting) return;
+    exporting = true;
+    try {
+      await campaignsApi.downloadExport(activeTabSlug);
+    } catch (e) {
+      showToast(translateError(e), 'error');
+    } finally {
+      exporting = false;
+    }
+  }
+
+  onMount(loadData);
+  onDestroy(() => clearTimeout(searchTimer));
 </script>
 
 <svelte:head>
@@ -94,24 +116,31 @@
 </svelte:head>
 
 <div class="analytics-page">
-  <!-- Top Header matching screenshot -->
   <header class="analytics-header">
     <div class="header-left">
       <div class="title-row">
-        <span class="bar-icon">📊</span>
+        <span class="bar-icon" aria-hidden="true">📊</span>
         <h2>{$t('admin.analyticsTitle')}</h2>
       </div>
-      <span class="updated-time">{$locale === 'en' ? 'Updated' : 'آخر تحديث'}: {lastUpdatedTime}</span>
+      {#if lastUpdated}
+        <span class="updated-time">{$t('admin.updatedAt', { time: formatTime(lastUpdated, $locale) })}</span>
+      {/if}
     </div>
 
     <div class="header-actions">
-      <button class="btn-round" onclick={loadData} title={$t('admin.refresh')}>
-        <span class="btn-icon">🔄</span>
+      <button type="button" class="btn-round" onclick={loadData} disabled={loading} title={$t('admin.refresh')}>
+        <span class="btn-icon" aria-hidden="true">🔄</span>
         <span>{$t('admin.refresh')}</span>
       </button>
 
-      <button class="btn-round" onclick={handleExportCsv} title={$t('admin.exportCsv')}>
-        <span class="btn-icon">📥</span>
+      <button
+        type="button"
+        class="btn-round"
+        onclick={handleExportCsv}
+        disabled={exporting || !activeTabSlug}
+        title={$t('admin.exportCsv')}
+      >
+        <span class="btn-icon" aria-hidden="true">📥</span>
         <span>{$t('admin.exportCsv')}</span>
       </button>
     </div>
@@ -122,10 +151,17 @@
   {:else if errorMsg}
     <ErrorState message={errorMsg} onretry={loadData} />
   {:else}
-    <!-- Horizontal Campaign Navigation Tabs matching screenshot -->
-    <div class="campaign-tabs-nav">
+    {#if stats}
+      <DashboardStats {stats} />
+    {/if}
+
+    <!-- Horizontal campaign tabs -->
+    <div class="campaign-tabs-nav" role="tablist">
       {#each analyticsCampaigns as camp (camp.slug)}
         <button
+          type="button"
+          role="tab"
+          aria-selected={activeTabSlug === camp.slug}
           class="nav-tab-item"
           class:active={activeTabSlug === camp.slug}
           onclick={() => handleTabChange(camp.slug)}
@@ -135,17 +171,16 @@
       {/each}
     </div>
 
-    <!-- ALL TIME STATS Card matching screenshot -->
     <div class="stats-section">
       <div class="section-badge-title">
-        <span class="icon">📊</span>
+        <span class="icon" aria-hidden="true">📊</span>
         <span>{$t('admin.allTimeStats')}</span>
       </div>
 
       <div class="stat-card-wide">
         <div class="stat-top-meta">
           <span class="stat-label">{$t('admin.totalCardsGenerated')}</span>
-          <span class="card-icon-pill">🎴</span>
+          <span class="card-icon-pill" aria-hidden="true">🎴</span>
         </div>
         <div class="stat-big-number">
           {activeCampaign?.totalCards ?? 0}
@@ -153,10 +188,9 @@
       </div>
     </div>
 
-    <!-- EMPLOYEE LIST Section matching screenshot -->
     <div class="employee-list-section">
       <div class="section-badge-title">
-        <span class="icon">📋</span>
+        <span class="icon" aria-hidden="true">📋</span>
         <span>{$t('admin.employeeList')}</span>
       </div>
 
@@ -164,30 +198,32 @@
         <div class="table-card-header">
           <div class="header-counter-box">
             <h4>{$t('admin.employeeCards')}</h4>
-            <span class="total-badge">{campaignCards.length} {$locale === 'en' ? 'total' : 'إجمالي'}</span>
+            <span class="total-badge">{$t('admin.totalCount', { count: cardsTotal })}</span>
           </div>
 
           <div class="search-box">
-            <span class="search-icon">🔍</span>
+            <span class="search-icon" aria-hidden="true">🔍</span>
             <input
-              type="text"
+              type="search"
               placeholder={$t('admin.searchPlaceholder')}
+              aria-label={$t('admin.searchPlaceholder')}
               bind:value={searchQuery}
+              oninput={handleSearchInput}
               class="search-input"
             />
           </div>
         </div>
 
-        {#if loadingCards}
+        {#if loadingCards && campaignCards.length === 0}
           <div class="cards-loading-wrap">
             <LoadingState />
           </div>
-        {:else if filteredCards.length === 0}
+        {:else if campaignCards.length === 0}
           <div class="empty-cards-wrap">
             <p>{$t('admin.noCardsForCampaign')}</p>
           </div>
         {:else}
-          <div class="table-scroll-container">
+          <div class="table-scroll-container" class:refreshing={loadingCards}>
             <table class="analytics-data-table">
               <thead>
                 <tr>
@@ -199,17 +235,17 @@
                 </tr>
               </thead>
               <tbody>
-                {#each filteredCards as card (card.id)}
+                {#each campaignCards as card (card.id)}
                   <tr>
                     <td class="name-cell">
                       <strong>{card.to || '-'}</strong>
                     </td>
                     <td class="details-cell">
-                      {card.message || (card.fieldValues && card.fieldValues['job_title']) || '-'}
+                      {card.message || card.fieldValues?.job_title || '-'}
                     </td>
                     <td>
                       <span class="lang-tag" class:en={card.lang === 'en'}>
-                        {card.lang === 'en' ? 'English' : 'عربي'}
+                        {card.lang === 'en' ? 'English' : 'العربية'}
                       </span>
                     </td>
                     <td class="date-cell">{card.date}</td>
@@ -219,6 +255,8 @@
               </tbody>
             </table>
           </div>
+
+          <Pager {offset} total={cardsTotal} pageSize={PAGE_SIZE} disabled={loadingCards} onchange={loadCampaignCards} />
         {/if}
       </div>
     </div>
@@ -296,10 +334,6 @@
     background: var(--surface-2);
     border-color: var(--color-accent);
     color: var(--color-accent);
-  }
-
-  .admin-pill {
-    background: var(--surface-3);
   }
 
   /* Horizontal Tabs */
@@ -534,5 +568,15 @@
     padding: 48px;
     text-align: center;
     color: var(--text-muted);
+  }
+
+  .table-scroll-container.refreshing {
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+  }
+
+  .btn-round:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 </style>

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { t } from '../../i18n';
-
   interface Props {
     title?: string;
     message?: string;
@@ -16,7 +14,9 @@
 
 <div class="empty-state">
   <span class="icon">{icon}</span>
-  <h4>{title || $t('app.error')}</h4>
+  {#if title}
+    <h4>{title}</h4>
+  {/if}
   {#if message}
     <p>{message}</p>
   {/if}

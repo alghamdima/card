@@ -1,31 +1,44 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { t } from '$lib/i18n';
+  import { isAnonymousSender } from '$lib/utils/cards';
+  import { t, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { Card } from '$lib/types/campaign.types';
   import LoadingState from '$lib/components/ui/LoadingState.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
+  import Pager from '$lib/components/ui/Pager.svelte';
+
+  const PAGE_SIZE = 50;
 
   let cards = $state<Card[]>([]);
   let total = $state(0);
+  let offset = $state(0);
   let loading = $state(true);
   let errorMsg = $state('');
 
-  async function loadCards() {
+  // Ignores the response of a superseded request (fast paging).
+  let request = 0;
+
+  async function loadCards(newOffset = 0) {
+    const current = ++request;
     loading = true;
     errorMsg = '';
     try {
-      const res = await campaignsApi.getAllCards(100, 0);
+      const res = await campaignsApi.getAllCards({ limit: PAGE_SIZE, offset: newOffset });
+      if (current !== request) return;
       cards = res.cards || [];
       total = res.total || 0;
-    } catch (e: any) {
-      errorMsg = e.message || 'Failed to load cards';
+      offset = newOffset;
+    } catch (e) {
+      if (current !== request) return;
+      errorMsg = translateError(e);
     } finally {
-      loading = false;
+      if (current === request) loading = false;
     }
   }
 
-  onMount(loadCards);
+
+  onMount(() => loadCards());
 </script>
 
 <svelte:head>
@@ -40,16 +53,16 @@
     </div>
   </div>
 
-  {#if loading}
+  {#if loading && cards.length === 0}
     <LoadingState />
   {:else if errorMsg}
-    <ErrorState message={errorMsg} onretry={loadCards} />
+    <ErrorState message={errorMsg} onretry={() => loadCards(offset)} />
   {:else if cards.length === 0}
     <div class="empty-box">
       <p>{$t('admin.noCardsYet')}</p>
     </div>
   {:else}
-    <div class="table-card">
+    <div class="table-card" class:refreshing={loading}>
       <div class="table-wrap">
         <table class="data-table">
           <thead>
@@ -65,19 +78,20 @@
           <tbody>
             {#each cards as card, idx (card.id)}
               <tr>
-                <td class="num-col">{total - idx}</td>
+                <td class="num-col">{total - offset - idx}</td>
                 <td>
                   <span class="slug-tag">{card.campaignSlug}</span>
                 </td>
                 <td><strong>{card.to || '-'}</strong></td>
-                <td class="msg-col">{card.message || (card.fieldValues && card.fieldValues['job_title']) || '-'}</td>
-                <td>{card.from || '-'}</td>
+                <td class="msg-col">{card.message || card.fieldValues?.job_title || '-'}</td>
+                <td>{isAnonymousSender(card.from) ? $t('app.anonymous') : card.from}</td>
                 <td class="date-col">{card.date} {card.time}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
+      <Pager {offset} {total} pageSize={PAGE_SIZE} disabled={loading} onchange={loadCards} />
     </div>
   {/if}
 </div>
@@ -151,14 +165,6 @@
     color: var(--text-muted);
   }
 
-  .dev-tag {
-    font-size: 11px;
-    padding: 2px 6px;
-    background: var(--surface-2);
-    border-radius: var(--radius-sm);
-    color: var(--text-dim);
-  }
-
   .date-col {
     color: var(--text-dim);
     font-size: 13px;
@@ -172,5 +178,10 @@
     border-radius: var(--radius-xl);
     border: 1px solid var(--color-border);
     color: var(--text-muted);
+  }
+
+  .table-card.refreshing {
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
   }
 </style>

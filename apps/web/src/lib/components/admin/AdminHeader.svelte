@@ -1,42 +1,48 @@
 <script lang="ts">
-  import { t, locale } from '../../i18n';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { t } from '../../i18n';
   import { authStore } from '../../stores/auth.store';
+  import BrandLogo from '../ui/BrandLogo.svelte';
   import LanguageSwitcher from '../ui/LanguageSwitcher.svelte';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 
-  function handleLogout() {
-    authStore.logout().then(() => {
-      window.location.href = '/login';
-    });
+  const links = [
+    { href: '/admin/dashboard', label: 'admin.analytics' },
+    { href: '/admin/cards', label: 'nav.campaigns' },
+    { href: '/admin/users', label: 'nav.cards' }
+  ];
+
+  async function handleLogout() {
+    await authStore.logout();
+    goto('/login');
   }
 </script>
 
 <header class="admin-header">
   <div class="brand">
-    <a href="/admin/dashboard" class="logo">
-      <img
-        src={$locale === 'en' ? '/images/brand/aljuf-en-tight.png' : '/images/brand/aljuf-ar-tight.png'}
-        alt="ALJ Finance"
-        class="admin-brand-logo light-only"
-      />
-      <img
-        src={$locale === 'en' ? '/images/brand/aljuf-en-white-tight.png' : '/images/brand/aljuf-ar-white-tight.png'}
-        alt="ALJ Finance"
-        class="admin-brand-logo dark-only"
-      />
+    <a href="/admin/dashboard" class="logo" title={$t('app.companyName')}>
+      <BrandLogo />
     </a>
   </div>
 
   <nav class="nav-links">
-    <a href="/admin/dashboard" class="nav-link">{$t('admin.analytics')}</a>
-    <a href="/admin/cards" class="nav-link">{$t('nav.campaigns')}</a>
-    <a href="/admin/users" class="nav-link">{$t('nav.cards')}</a>
+    {#each links as link (link.href)}
+      <a
+        href={link.href}
+        class="nav-link"
+        class:active={page.url.pathname.startsWith(link.href)}
+        aria-current={page.url.pathname.startsWith(link.href) ? 'page' : undefined}
+      >
+        {$t(link.label)}
+      </a>
+    {/each}
   </nav>
 
   <div class="actions">
     <ThemeSwitcher />
     <LanguageSwitcher />
-    <button class="logout-btn" onclick={handleLogout}>
+    <button type="button" class="logout-btn" onclick={handleLogout}>
       {$t('nav.logout')}
     </button>
   </div>
@@ -62,30 +68,6 @@
     font-weight: 800;
     color: var(--text-main);
     text-decoration: none;
-  }
-
-  .admin-brand-logo {
-    height: 48px;
-    width: auto;
-    object-fit: contain;
-  }
-
-  :global([data-theme="light"]) .dark-only {
-    display: none !important;
-  }
-
-  :global([data-theme="light"]) .light-only {
-    display: block !important;
-  }
-
-  :global([data-theme="dark"]) .light-only,
-  :global(:root:not([data-theme="light"])) .light-only {
-    display: none !important;
-  }
-
-  :global([data-theme="dark"]) .dark-only,
-  :global(:root:not([data-theme="light"])) .dark-only {
-    display: block !important;
   }
 
   .nav-links {
@@ -132,5 +114,9 @@
       flex-direction: column;
       align-items: flex-start;
     }
+  }
+
+  .nav-link.active {
+    color: var(--color-accent);
   }
 </style>

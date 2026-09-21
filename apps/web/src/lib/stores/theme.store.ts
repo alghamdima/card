@@ -1,42 +1,42 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+import { getItem, setItem } from '../utils/storage';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
+export type EffectiveTheme = 'dark' | 'light';
 
-function getInitialTheme(): ThemePreference {
-  if (typeof window === 'undefined') return 'system';
-  const saved = localStorage.getItem('user_theme') as ThemePreference;
-  if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
-  return 'system';
+const THEME_KEY = 'user_theme';
+
+function readPreference(): ThemePreference {
+  const saved = getItem(THEME_KEY);
+  return saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'system';
 }
 
-export const theme = writable<ThemePreference>(getInitialTheme());
+function resolve(pref: ThemePreference): EffectiveTheme {
+  if (pref !== 'system') return pref;
+  if (typeof window === 'undefined') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
 
-export function applyTheme(val: ThemePreference) {
+export const theme = writable<ThemePreference>(readPreference());
+
+/** The theme actually shown (system preference resolved), e.g. to pick the matching logo. */
+export const effectiveTheme = writable<EffectiveTheme>(resolve(readPreference()));
+
+export function applyTheme(pref: ThemePreference) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('user_theme', val);
-  theme.set(val);
+  setItem(THEME_KEY, pref);
+  theme.set(pref);
 
-  let effective: 'dark' | 'light' = 'dark';
-  if (val === 'system') {
-    effective = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  } else {
-    effective = val;
-  }
-
+  const effective = resolve(pref);
+  effectiveTheme.set(effective);
   document.documentElement.setAttribute('data-theme', effective);
 }
 
 if (typeof window !== 'undefined') {
-  // Listen for system theme changes when in 'system' mode
-  const mql = window.matchMedia('(prefers-color-scheme: light)');
-  mql.addEventListener('change', () => {
-    let currentPref: ThemePreference = 'system';
-    theme.subscribe((t) => (currentPref = t))();
-    if (currentPref === 'system') {
-      applyTheme('system');
-    }
+  // Follow OS theme changes while in "system" mode.
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if (get(theme) === 'system') applyTheme('system');
   });
 
-  // Apply on startup
-  applyTheme(getInitialTheme());
+  applyTheme(readPreference());
 }

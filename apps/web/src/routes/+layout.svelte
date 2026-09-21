@@ -1,8 +1,9 @@
 <script lang="ts">
   import '../lib/styles/app.css';
+  // Side-effect imports: these stores apply the saved theme and keep <html lang/dir> in sync as soon as the app boots.
+  import '../lib/stores/theme.store';
+  import '../lib/i18n';
   import Toast from '../lib/components/ui/Toast.svelte';
-  import { onMount } from 'svelte';
-  import { applyTheme } from '../lib/stores/theme.store';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -10,12 +11,6 @@
   }
 
   let { children }: Props = $props();
-
-  onMount(() => {
-    // ensure theme initialized on client
-    const saved = localStorage.getItem('user_theme') || 'system';
-    applyTheme(saved as any);
-  });
 </script>
 
 <div class="app-shell">
