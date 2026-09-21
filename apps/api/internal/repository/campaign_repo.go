@@ -4,11 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"time"
+	"log"
+	"strings"
 
 	"cards-api/internal/domain"
 )
+
+// ErrDuplicateSlug is returned when a campaign slug is already taken.
+var ErrDuplicateSlug = errors.New("duplicate campaign slug")
 
 type CampaignRepository struct {
 	db *sql.DB
@@ -18,264 +23,122 @@ func NewCampaignRepository(db *sql.DB) *CampaignRepository {
 	return &CampaignRepository{db: db}
 }
 
+const campaignColumns = `id, slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang,
+	text_color, head_color, boxes, image, COALESCE(thumb, ''), template_ar, template_en, active, created_at`
+
 func (r *CampaignRepository) ExistsSlug(ctx context.Context, slug string) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaigns WHERE slug = ?", slug).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	var exists bool
+	err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM campaigns WHERE slug = ?)", slug).Scan(&exists)
+	return exists, err
 }
 
+// GetPublicBySlug returns the campaign only when it is active.
 func (r *CampaignRepository) GetPublicBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
-	query := `
-		SELECT id, slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
-		FROM campaigns
-		WHERE slug = ? AND active = 1
-	`
-	var c domain.Campaign
-	var boxesRaw string
-	var createdAtStr string
-	var activeInt int
-	var templateARRaw, templateENRaw sql.NullString
-
-	err := r.db.QueryRowContext(ctx, query, slug).Scan(
-		&c.ID, &c.Slug, &c.Title, &c.TitleAR, &c.TitleEN, &c.Lang, &c.TextColor, &c.HeadColor,
-		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to query public campaign: %w", err)
-	}
-
-	c.Active = activeInt == 1
-	c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-	if c.CreatedAt.IsZero() {
-		c.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-	}
-
-	_ = json.Unmarshal([]byte(boxesRaw), &c.Boxes)
-	if templateARRaw.Valid && templateARRaw.String != "" {
-		var tar domain.TemplateVariant
-		if err := json.Unmarshal([]byte(templateARRaw.String), &tar); err == nil {
-			c.TemplateAR = &tar
-		}
-	}
-	if templateENRaw.Valid && templateENRaw.String != "" {
-		var ten domain.TemplateVariant
-		if err := json.Unmarshal([]byte(templateENRaw.String), &ten); err == nil {
-			c.TemplateEN = &ten
-		}
-	}
-
-	return &c, nil
-}
-
-func (r *CampaignRepository) GetAllPublic(ctx context.Context) ([]domain.CampaignSummary, error) {
-	query := `
-		SELECT c.slug, c.title, COALESCE(c.title_ar, c.title), COALESCE(c.title_en, c.title), c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
-		       COUNT(k.id) as card_count
-		FROM campaigns c
-		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
-		WHERE c.active = 1
-		GROUP BY c.slug
-		ORDER BY c.id DESC
-	`
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query all public campaigns: %w", err)
-	}
-	defer rows.Close()
-
-	var list []domain.CampaignSummary
-	for rows.Next() {
-		var s domain.CampaignSummary
-		var createdAtStr string
-		var activeInt int
-		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
-			return nil, err
-		}
-		s.Active = activeInt == 1
-		s.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-		if s.CreatedAt.IsZero() {
-			s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		}
-		list = append(list, s)
-	}
-
-	return list, nil
-}
-
-func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.CampaignSummary, error) {
-	query := `
-		SELECT c.slug, c.title, COALESCE(c.title_ar, c.title), COALESCE(c.title_en, c.title), c.lang, c.text_color, c.head_color, c.thumb, c.active, c.created_at,
-		       COUNT(k.id) as card_count
-		FROM campaigns c
-		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
-		GROUP BY c.slug
-		ORDER BY c.id DESC
-	`
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query all admin campaigns: %w", err)
-	}
-	defer rows.Close()
-
-	var list []domain.CampaignSummary
-	for rows.Next() {
-		var s domain.CampaignSummary
-		var createdAtStr string
-		var activeInt int
-		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &activeInt, &createdAtStr, &s.TotalCards); err != nil {
-			return nil, err
-		}
-		s.Active = activeInt == 1
-		s.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-		if s.CreatedAt.IsZero() {
-			s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		}
-		list = append(list, s)
-	}
-
-	return list, nil
+	row := r.db.QueryRowContext(ctx, "SELECT "+campaignColumns+" FROM campaigns WHERE slug = ? AND active = 1", slug)
+	return scanCampaignRow(row)
 }
 
 func (r *CampaignRepository) GetBySlug(ctx context.Context, slug string) (*domain.Campaign, error) {
-	query := `
-		SELECT id, slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active, created_at
+	row := r.db.QueryRowContext(ctx, "SELECT "+campaignColumns+" FROM campaigns WHERE slug = ?", slug)
+	return scanCampaignRow(row)
+}
+
+func (r *CampaignRepository) GetAllPublic(ctx context.Context) ([]domain.PublicCampaignSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT slug, title, COALESCE(title_ar, title), COALESCE(title_en, title), lang,
+		       text_color, head_color, COALESCE(thumb, ''), created_at
 		FROM campaigns
-		WHERE slug = ?
-	`
-	var c domain.Campaign
-	var boxesRaw string
-	var createdAtStr string
-	var activeInt int
-	var templateARRaw, templateENRaw sql.NullString
-
-	err := r.db.QueryRowContext(ctx, query, slug).Scan(
-		&c.ID, &c.Slug, &c.Title, &c.TitleAR, &c.TitleEN, &c.Lang, &c.TextColor, &c.HeadColor,
-		&boxesRaw, &c.Image, &c.Thumb, &templateARRaw, &templateENRaw, &activeInt, &createdAtStr,
-	)
+		WHERE active = 1
+		ORDER BY id DESC
+	`)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to query campaign by slug: %w", err)
+		return nil, fmt.Errorf("failed to query public campaigns: %w", err)
 	}
+	defer rows.Close()
 
-	c.Active = activeInt == 1
-	c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-	if c.CreatedAt.IsZero() {
-		c.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-	}
-
-	_ = json.Unmarshal([]byte(boxesRaw), &c.Boxes)
-	if templateARRaw.Valid && templateARRaw.String != "" {
-		var tar domain.TemplateVariant
-		if err := json.Unmarshal([]byte(templateARRaw.String), &tar); err == nil {
-			c.TemplateAR = &tar
+	list := []domain.PublicCampaignSummary{}
+	for rows.Next() {
+		var s domain.PublicCampaignSummary
+		var createdAt string
+		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan public campaign: %w", err)
 		}
+		s.CreatedAt = parseDBTime(createdAt)
+		list = append(list, s)
 	}
-	if templateENRaw.Valid && templateENRaw.String != "" {
-		var ten domain.TemplateVariant
-		if err := json.Unmarshal([]byte(templateENRaw.String), &ten); err == nil {
-			c.TemplateEN = &ten
-		}
-	}
+	return list, rows.Err()
+}
 
-	return &c, nil
+func (r *CampaignRepository) GetAllAdmin(ctx context.Context) ([]domain.CampaignSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT c.slug, c.title, COALESCE(c.title_ar, c.title), COALESCE(c.title_en, c.title), c.lang,
+		       c.text_color, c.head_color, COALESCE(c.thumb, ''), c.active, c.created_at,
+		       (SELECT COUNT(*) FROM campaign_cards k WHERE k.campaign_slug = c.slug)
+		FROM campaigns c
+		ORDER BY c.id DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query admin campaigns: %w", err)
+	}
+	defer rows.Close()
+
+	list := []domain.CampaignSummary{}
+	for rows.Next() {
+		var s domain.CampaignSummary
+		var createdAt string
+		var active int
+		if err := rows.Scan(&s.Slug, &s.Title, &s.TitleAR, &s.TitleEN, &s.Lang, &s.TextColor, &s.HeadColor, &s.Thumb, &active, &createdAt, &s.TotalCards); err != nil {
+			return nil, fmt.Errorf("failed to scan admin campaign: %w", err)
+		}
+		s.Active = active == 1
+		s.CreatedAt = parseDBTime(createdAt)
+		list = append(list, s)
+	}
+	return list, rows.Err()
 }
 
 func (r *CampaignRepository) Create(ctx context.Context, c *domain.Campaign) error {
-	boxesBytes, err := json.Marshal(c.Boxes)
+	boxes, templateAR, templateEN, err := encodeCampaignJSON(c)
 	if err != nil {
-		return fmt.Errorf("failed to marshal boxes: %w", err)
+		return err
 	}
 
-	var templateARStr, templateENStr sql.NullString
-	if c.TemplateAR != nil {
-		b, err := json.Marshal(c.TemplateAR)
-		if err == nil {
-			templateARStr = sql.NullString{String: string(b), Valid: true}
-		}
-	}
-	if c.TemplateEN != nil {
-		b, err := json.Marshal(c.TemplateEN)
-		if err == nil {
-			templateENStr = sql.NullString{String: string(b), Valid: true}
-		}
-	}
-
-	if c.TitleAR == "" {
-		c.TitleAR = c.Title
-	}
-	if c.TitleEN == "" {
-		c.TitleEN = c.Title
-	}
-
-	query := `
+	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO campaigns (slug, title, title_ar, title_en, lang, text_color, head_color, boxes, image, thumb, template_ar, template_en, active)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	activeInt := 0
-	if c.Active {
-		activeInt = 1
-	}
-
-	res, err := r.db.ExecContext(ctx, query,
+	`,
 		c.Slug, c.Title, c.TitleAR, c.TitleEN, c.Lang, c.TextColor, c.HeadColor,
-		string(boxesBytes), c.Image, c.Thumb, templateARStr, templateENStr, activeInt,
+		boxes, c.Image, c.Thumb, templateAR, templateEN, boolToInt(c.Active),
 	)
 	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrDuplicateSlug
+		}
 		return fmt.Errorf("failed to insert campaign: %w", err)
 	}
 
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to read new campaign id: %w", err)
+	}
 	c.ID = id
 	return nil
 }
 
 func (r *CampaignRepository) Update(ctx context.Context, c *domain.Campaign) error {
-	boxesBytes, err := json.Marshal(c.Boxes)
+	boxes, templateAR, templateEN, err := encodeCampaignJSON(c)
 	if err != nil {
-		return fmt.Errorf("failed to marshal boxes: %w", err)
+		return err
 	}
 
-	activeInt := 0
-	if c.Active {
-		activeInt = 1
-	}
-
-	var templateARStr, templateENStr sql.NullString
-	if c.TemplateAR != nil {
-		b, err := json.Marshal(c.TemplateAR)
-		if err == nil {
-			templateARStr = sql.NullString{String: string(b), Valid: true}
-		}
-	}
-	if c.TemplateEN != nil {
-		b, err := json.Marshal(c.TemplateEN)
-		if err == nil {
-			templateENStr = sql.NullString{String: string(b), Valid: true}
-		}
-	}
-
-	if c.TitleAR == "" {
-		c.TitleAR = c.Title
-	}
-	if c.TitleEN == "" {
-		c.TitleEN = c.Title
-	}
-
-	query := `
+	_, err = r.db.ExecContext(ctx, `
 		UPDATE campaigns
-		SET title = ?, title_ar = ?, title_en = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?, image = CASE WHEN ? != '' THEN ? ELSE image END, thumb = CASE WHEN ? != '' THEN ? ELSE thumb END, template_ar = ?, template_en = ?, active = ?
+		SET title = ?, title_ar = ?, title_en = ?, lang = ?, text_color = ?, head_color = ?, boxes = ?,
+		    image = ?, thumb = ?, template_ar = ?, template_en = ?, active = ?
 		WHERE slug = ?
-	`
-	_, err = r.db.ExecContext(ctx, query,
-		c.Title, c.TitleAR, c.TitleEN, c.Lang, c.TextColor, c.HeadColor, string(boxesBytes), c.Image, c.Image, c.Thumb, c.Thumb, templateARStr, templateENStr, activeInt, c.Slug,
+	`,
+		c.Title, c.TitleAR, c.TitleEN, c.Lang, c.TextColor, c.HeadColor, boxes,
+		c.Image, c.Thumb, templateAR, templateEN, boolToInt(c.Active), c.Slug,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update campaign: %w", err)
@@ -283,19 +146,105 @@ func (r *CampaignRepository) Update(ctx context.Context, c *domain.Campaign) err
 	return nil
 }
 
-func (r *CampaignRepository) Delete(ctx context.Context, slug string) error {
+// Delete removes the campaign and its cards. It reports whether a campaign existed.
+func (r *CampaignRepository) Delete(ctx context.Context, slug string) (bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM campaign_cards WHERE campaign_slug = ?", slug); err != nil {
-		return fmt.Errorf("failed to delete campaign cards: %w", err)
+		return false, fmt.Errorf("failed to delete campaign cards: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM campaigns WHERE slug = ?", slug); err != nil {
-		return fmt.Errorf("failed to delete campaign: %w", err)
+	res, err := tx.ExecContext(ctx, "DELETE FROM campaigns WHERE slug = ?", slug)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete campaign: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return affected > 0, nil
+}
+
+// scanCampaignRow returns (nil, nil) when the row does not exist.
+func scanCampaignRow(row *sql.Row) (*domain.Campaign, error) {
+	var c domain.Campaign
+	var boxesRaw, createdAt string
+	var active int
+	var templateAR, templateEN sql.NullString
+
+	err := row.Scan(
+		&c.ID, &c.Slug, &c.Title, &c.TitleAR, &c.TitleEN, &c.Lang, &c.TextColor, &c.HeadColor,
+		&boxesRaw, &c.Image, &c.Thumb, &templateAR, &templateEN, &active, &createdAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan campaign: %w", err)
+	}
+
+	c.Active = active == 1
+	c.CreatedAt = parseDBTime(createdAt)
+
+	if err := json.Unmarshal([]byte(boxesRaw), &c.Boxes); err != nil {
+		log.Printf("campaign %q has invalid boxes JSON: %v", c.Slug, err)
+	}
+	c.TemplateAR = decodeTemplate(c.Slug, "template_ar", templateAR)
+	c.TemplateEN = decodeTemplate(c.Slug, "template_en", templateEN)
+	return &c, nil
+}
+
+func decodeTemplate(slug, column string, raw sql.NullString) *domain.TemplateVariant {
+	if !raw.Valid || raw.String == "" {
+		return nil
+	}
+	var v domain.TemplateVariant
+	if err := json.Unmarshal([]byte(raw.String), &v); err != nil {
+		log.Printf("campaign %q has invalid %s JSON: %v", slug, column, err)
+		return nil
+	}
+	return &v
+}
+
+func encodeCampaignJSON(c *domain.Campaign) (boxes string, templateAR, templateEN sql.NullString, err error) {
+	boxesBytes, err := json.Marshal(c.Boxes)
+	if err != nil {
+		return "", templateAR, templateEN, fmt.Errorf("failed to marshal boxes: %w", err)
+	}
+	if templateAR, err = encodeTemplate(c.TemplateAR); err != nil {
+		return "", templateAR, templateEN, fmt.Errorf("failed to marshal Arabic template: %w", err)
+	}
+	if templateEN, err = encodeTemplate(c.TemplateEN); err != nil {
+		return "", templateAR, templateEN, fmt.Errorf("failed to marshal English template: %w", err)
+	}
+	return string(boxesBytes), templateAR, templateEN, nil
+}
+
+func encodeTemplate(v *domain.TemplateVariant) (sql.NullString, error) {
+	if v == nil {
+		return sql.NullString{}, nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	return sql.NullString{String: string(b), Valid: true}, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func isUniqueViolation(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

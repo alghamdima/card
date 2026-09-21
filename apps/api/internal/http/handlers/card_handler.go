@@ -1,13 +1,18 @@
 package handlers
 
 import (
-	"encoding/json"
+	"encoding/csv"
 	"fmt"
+	"log"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"cards-api/internal/domain"
+	"cards-api/internal/http/response"
 	"cards-api/internal/service"
 )
 
@@ -19,131 +24,116 @@ func NewCardHandler(cardService *service.CardService) *CardHandler {
 	return &CardHandler{cardService: cardService}
 }
 
-// Public: Submit a card for a campaign
+// Create records a generated card for a campaign (public, used for participation analytics).
 func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-
 	var input service.SaveCardInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		JSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid JSON payload")
+	if !decodeJSON(w, r, &input, maxSmallBody) {
 		return
 	}
-
-	input.CampaignSlug = slug
+	input.CampaignSlug = chi.URLParam(r, "slug")
 
 	card, err := h.cardService.SaveCard(r.Context(), input)
 	if err != nil {
-		if err == service.ErrCampaignNotFound {
-			JSONError(w, http.StatusNotFound, "CAMPAIGN_NOT_FOUND", "Campaign does not exist or is inactive")
-			return
-		}
-		if err == service.ErrInvalidCardInput {
-			JSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid card submission data")
-			return
-		}
-		JSONError(w, http.StatusInternalServerError, "SAVE_FAILED", "Failed to save card: "+err.Error())
+		writeServiceError(w, r, err, "SAVE_FAILED", "Failed to save card")
 		return
 	}
 
-	JSONCreated(w, map[string]interface{}{
-		"saved": true,
-		"id":    card.ID,
-	})
+	response.Created(w, map[string]any{"saved": true, "id": card.ID})
 }
 
-// Admin: Get cards for a specific campaign
+// ListByCampaign returns one page of a campaign's cards; supports ?limit, ?offset and ?q.
 func (h *CardHandler) ListByCampaign(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	cards, err := h.cardService.GetCardsByCampaign(r.Context(), slug)
-	if err != nil {
-		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load cards")
-		return
-	}
-
-	JSONOK(w, map[string]interface{}{
-		"slug":  slug,
-		"cards": cards,
-		"total": len(cards),
-	})
+	h.writeCardPage(w, r, chi.URLParam(r, "slug"))
 }
 
-// Admin: Get all cards across all campaigns
+// ListAll returns one page of cards across all campaigns; supports ?limit, ?offset and ?q.
 func (h *CardHandler) ListAll(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	offsetStr := r.URL.Query().Get("offset")
+	h.writeCardPage(w, r, "")
+}
 
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
+func (h *CardHandler) writeCardPage(w http.ResponseWriter, r *http.Request, slug string) {
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
 
-	cards, total, err := h.cardService.GetAllCards(r.Context(), limit, offset)
+	cards, total, err := h.cardService.CardPage(r.Context(), slug, query.Get("q"), limit, offset)
 	if err != nil {
-		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load cards")
+		writeServiceError(w, r, err, "LOAD_FAILED", "Failed to load cards")
 		return
 	}
 
-	JSONOK(w, map[string]interface{}{
-		"cards":  cards,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	})
+	data := map[string]any{"cards": cards, "total": total, "limit": limit, "offset": offset}
+	if slug != "" {
+		data["slug"] = slug
+	}
+	response.OK(w, data)
 }
 
-// Admin: Dashboard overall statistics
 func (h *CardHandler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.cardService.GetDashboardStats(r.Context())
 	if err != nil {
-		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load dashboard stats")
+		writeServiceError(w, r, err, "LOAD_FAILED", "Failed to load dashboard stats")
 		return
 	}
-
-	JSONOK(w, stats)
+	response.OK(w, stats)
 }
 
-// Admin: Campaign Analytics Overview for tabs
 func (h *CardHandler) AnalyticsOverview(w http.ResponseWriter, r *http.Request) {
 	list, err := h.cardService.GetCampaignAnalyticsList(r.Context())
 	if err != nil {
-		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load campaign analytics")
+		writeServiceError(w, r, err, "LOAD_FAILED", "Failed to load campaign analytics")
 		return
 	}
-
-	JSONOK(w, map[string]interface{}{
-		"campaigns": list,
-	})
+	response.OK(w, map[string]any{"campaigns": list})
 }
 
-// Admin: Export cards as CSV for a campaign
+var unsafeFilenameChars = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+// ExportCampaignCSV streams every card of a campaign as an Excel-friendly CSV.
 func (h *CardHandler) ExportCampaignCSV(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	cards, err := h.cardService.GetCardsByCampaign(r.Context(), slug)
-	if err != nil {
-		JSONError(w, http.StatusInternalServerError, "LOAD_FAILED", "Failed to load cards for export")
-		return
-	}
 
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+slug+"-cards.csv\"")
-	// Write UTF-8 BOM for Excel Arabic character support
-	w.Write([]byte{0xEF, 0xBB, 0xBF})
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-cards.csv"`, unsafeFilenameChars.ReplaceAllString(slug, "_")))
+	// UTF-8 BOM so Excel detects Arabic text correctly.
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	w.Write([]byte("ID,Full Name,Job Title / Details,Sender,Language,Date,Time\n"))
-	for _, c := range cards {
-		details := c.Message
-		if details == "" && c.FieldValues != nil {
-			if jt, ok := c.FieldValues["job_title"]; ok && jt != nil {
-				details = strconv.Quote(fmt.Sprintf("%v", jt))
-			}
-		}
-		line := fmt.Sprintf("%d,%s,%s,%s,%s,%s,%s\n",
-			c.ID,
-			strconv.Quote(c.ToName),
-			strconv.Quote(details),
-			strconv.Quote(c.FromName),
+	out := csv.NewWriter(w)
+	_ = out.Write([]string{"ID", "Full Name", "Job Title / Details", "Sender", "Language", "Date", "Time"})
+
+	err := h.cardService.ExportCampaignCards(r.Context(), slug, func(c domain.Card) error {
+		return out.Write([]string{
+			strconv.FormatInt(c.ID, 10),
+			csvSafe(c.ToName),
+			csvSafe(cardDetails(c)),
+			csvSafe(c.FromName),
 			c.Lang,
 			c.DateStr,
 			c.TimeStr,
-		)
-		w.Write([]byte(line))
+		})
+	})
+	out.Flush()
+	if err != nil {
+		// Headers are already sent, so the best we can do is log the truncated export.
+		log.Printf("CSV export for %q aborted: %v", slug, err)
 	}
+}
+
+func cardDetails(c domain.Card) string {
+	if c.Message != "" {
+		return c.Message
+	}
+	if jobTitle, ok := c.FieldValues["job_title"]; ok && jobTitle != nil {
+		return fmt.Sprint(jobTitle)
+	}
+	return ""
+}
+
+// csvSafe neutralizes spreadsheet formula injection: cells starting with
+// = + - @ (or tab/CR) would be executed by Excel, so they are prefixed with a quote.
+func csvSafe(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
 }

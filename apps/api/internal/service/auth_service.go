@@ -11,63 +11,66 @@ import (
 	"time"
 )
 
-var (
-	ErrInvalidCredentials = errors.New("INVALID_CREDENTIALS")
-	ErrUnauthorized       = errors.New("UNAUTHORIZED")
-	ErrTokenExpired       = errors.New("TOKEN_EXPIRED")
+var ErrInvalidCredentials = errors.New("INVALID_CREDENTIALS")
+
+const (
+	tokenLifetime      = 24 * time.Hour
+	failedLoginDelay   = 300 * time.Millisecond
+	tokenPartsExpected = 2
 )
 
 type AuthService struct {
-	adminPassword string
-	sessionSecret string
+	passwordDigest [sha256.Size]byte
+	sessionSecret  []byte
+	now            func() time.Time
 }
 
 func NewAuthService(adminPassword, sessionSecret string) *AuthService {
 	return &AuthService{
-		adminPassword: adminPassword,
-		sessionSecret: sessionSecret,
+		// Comparing fixed-length digests keeps the check constant-time even
+		// when the attacker-supplied password has a different length.
+		passwordDigest: sha256.Sum256([]byte(adminPassword)),
+		sessionSecret:  []byte(sessionSecret),
+		now:            time.Now,
 	}
 }
 
 func (s *AuthService) Login(password string) (string, error) {
-	if subtle.ConstantTimeCompare([]byte(password), []byte(s.adminPassword)) != 1 {
-		time.Sleep(300 * time.Millisecond) // Thwart timing attacks
+	digest := sha256.Sum256([]byte(password))
+	if subtle.ConstantTimeCompare(digest[:], s.passwordDigest[:]) != 1 {
+		time.Sleep(failedLoginDelay) // slow down online guessing
 		return "", ErrInvalidCredentials
 	}
-
-	token := s.GenerateToken(24 * time.Hour)
-	return token, nil
+	return s.GenerateToken(tokenLifetime), nil
 }
 
+// GenerateToken returns "<expiryUnixMilli>.<hex hmac-sha256 of expiry>".
 func (s *AuthService) GenerateToken(duration time.Duration) string {
-	exp := time.Now().Add(duration).UnixMilli()
-	expStr := strconv.FormatInt(exp, 10)
-
-	h := hmac.New(sha256.New, []byte(s.sessionSecret))
-	h.Write([]byte(expStr))
-	sig := hex.EncodeToString(h.Sum(nil))
-
-	return expStr + "." + sig
+	expiry := strconv.FormatInt(s.now().Add(duration).UnixMilli(), 10)
+	return expiry + "." + s.sign(expiry)
 }
 
 func (s *AuthService) ValidateToken(token string) bool {
-	if token == "" {
-		return false
-	}
-
 	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
+	if len(parts) != tokenPartsExpected {
 		return false
 	}
 
-	exp, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil || time.Now().UnixMilli() > exp {
+	expiry, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || s.now().UnixMilli() > expiry {
 		return false
 	}
 
-	h := hmac.New(sha256.New, []byte(s.sessionSecret))
-	h.Write([]byte(parts[0]))
-	expectedSig := hex.EncodeToString(h.Sum(nil))
+	signature, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	expected, _ := hex.DecodeString(s.sign(parts[0]))
+	return hmac.Equal(signature, expected)
+}
 
-	return subtle.ConstantTimeCompare([]byte(parts[1]), []byte(expectedSig)) == 1
+func (s *AuthService) sign(payload string) string {
+	h := hmac.New(sha256.New, s.sessionSecret)
+	h.Write([]byte(payload))
+	return hex.EncodeToString(h.Sum(nil))
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	_ "time/tzdata" // bundle the timezone database so APP_TIMEZONE works on minimal images
 
 	"cards-api/internal/config"
 	"cards-api/internal/database"
@@ -18,80 +20,97 @@ import (
 )
 
 func main() {
-	// 1. Load config
+	if err := run(); err != nil {
+		log.Fatalf("Fatal: %v", err)
+	}
+}
+
+func run() error {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Fatal: failed to load configuration: %v", err)
+		return err
+	}
+	if !cfg.IsProduction() {
+		log.Printf("Running in %q mode: insecure development defaults are allowed", cfg.AppEnv)
 	}
 
-	// 2. Connect to SQLite
+	loc, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return err
+	}
+
 	db, err := database.Connect(cfg.DatabasePath)
 	if err != nil {
-		log.Fatalf("Fatal: failed to initialize database: %v", err)
+		return err
 	}
 	defer db.Close()
-	log.Printf("Connected to SQLite database at: %s (WAL Mode)", cfg.DatabasePath)
+	log.Printf("Connected to SQLite database at %s (WAL mode)", cfg.DatabasePath)
 
-	// 3. Run migrations
-	migrationsDir := os.Getenv("MIGRATIONS_PATH")
-	if migrationsDir == "" {
-		migrationsDir = "./migrations"
-		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-			// check relative to binary
-			ex, _ := os.Executable()
-			migrationsDir = filepath.Join(filepath.Dir(ex), "migrations")
-		}
-	}
-	if err := database.RunMigrations(db, migrationsDir); err != nil {
-		log.Printf("Warning: migrations returned: %v", err)
+	// A schema that failed to migrate must stop the boot: serving traffic on a
+	// half-migrated database only turns into confusing runtime errors.
+	if err := database.RunMigrations(db, migrationsDir(cfg.MigrationsPath)); err != nil {
+		return err
 	}
 
-	// 4. Repositories
 	campaignRepo := repository.NewCampaignRepository(db)
 	cardRepo := repository.NewCardRepository(db)
 
-	// 5. Services
-	authService := service.NewAuthService(cfg.AdminPassword, cfg.SessionSecret)
-	campaignService := service.NewCampaignService(campaignRepo)
-	cardService := service.NewCardService(cardRepo, campaignRepo)
-
-	// 6. Router
 	router := internalhttp.SetupRoutes(internalhttp.RouterParams{
 		Config:          cfg,
-		AuthService:     authService,
-		CampaignService: campaignService,
-		CardService:     cardService,
+		DB:              db,
+		AuthService:     service.NewAuthService(cfg.AdminPassword, cfg.SessionSecret),
+		CampaignService: service.NewCampaignService(campaignRepo),
+		CardService:     service.NewCardService(cardRepo, campaignRepo, loc),
 	})
 
-	// 7. Server
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second, // campaign uploads carry base64 artwork
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
-	// 8. Graceful shutdown
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
-
+	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("Cards API server listening on http://0.0.0.0:%s", cfg.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
 	}()
 
-	<-stopChan
-	log.Println("Shutting down Cards API server gracefully...")
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Server forced shutdown error: %v", err)
+	select {
+	case err := <-serverErr:
+		return err
+	case <-stop:
 	}
 
+	log.Println("Shutting down Cards API server gracefully...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server forced shutdown: %v", err)
+	}
 	log.Println("Cards API server stopped.")
+	return nil
+}
+
+// migrationsDir resolves the migration scripts: explicit config first, then
+// ./migrations, then next to the executable.
+func migrationsDir(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	if _, err := os.Stat("./migrations"); err == nil {
+		return "./migrations"
+	}
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "migrations")
+	}
+	return "./migrations"
 }

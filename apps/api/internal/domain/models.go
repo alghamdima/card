@@ -63,6 +63,20 @@ type Campaign struct {
 	CreatedAt  time.Time        `json:"createdAt"`
 }
 
+// PublicCampaignSummary is the anonymous-facing listing entry. It deliberately
+// omits participation counters, which are admin-only analytics.
+type PublicCampaignSummary struct {
+	Slug      string    `json:"slug"`
+	Title     string    `json:"title"`
+	TitleAR   string    `json:"titleAR,omitempty"`
+	TitleEN   string    `json:"titleEN,omitempty"`
+	Lang      string    `json:"lang"`
+	TextColor string    `json:"textColor"`
+	HeadColor string    `json:"headColor"`
+	Thumb     string    `json:"thumb,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type CampaignSummary struct {
 	Slug       string    `json:"slug"`
 	Title      string    `json:"title"`
@@ -101,9 +115,9 @@ type DashboardStats struct {
 }
 
 type CampaignAnalytics struct {
-	Slug        string `json:"slug"`
-	Title       string `json:"title"`
-	TotalCards  int    `json:"totalCards"`
-	CardsToday  int    `json:"cardsToday"`
-	LastCardAt  string `json:"lastCardAt,omitempty"`
+	Slug       string `json:"slug"`
+	Title      string `json:"title"`
+	TotalCards int    `json:"totalCards"`
+	CardsToday int    `json:"cardsToday"`
+	LastCardAt string `json:"lastCardAt,omitempty"`
 }

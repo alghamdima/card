@@ -1,0 +1,8 @@
+bin/
+*.exe
+*.test
+*.db
+*.db-shm
+*.db-wal
+data/
+.git

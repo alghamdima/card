@@ -1,76 +1,98 @@
 package middleware
 
 import (
-	"encoding/json"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"cards-api/internal/http/response"
 )
 
-type ipLimiter struct {
+const (
+	limiterIdleTTL       = 5 * time.Minute
+	limiterSweepInterval = time.Minute
+)
+
+type visitor struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
 }
 
-var (
-	limiters = make(map[string]*ipLimiter)
-	mu       sync.Mutex
-)
+// RateLimiter is a per-client token bucket. Each instance keeps its own state,
+// so different routes can have different budgets.
+type RateLimiter struct {
+	limit      rate.Limit
+	burst      int
+	trustProxy bool
 
-func init() {
-	go func() {
-		for {
-			time.Sleep(3 * time.Minute)
-			mu.Lock()
-			for ip, il := range limiters {
-				if time.Since(il.lastSeen) > 5*time.Minute {
-					delete(limiters, ip)
-				}
+	mu        sync.Mutex
+	visitors  map[string]*visitor
+	lastSweep time.Time
+	now       func() time.Time
+}
+
+// NewRateLimiter allows `burst` requests at once per client, refilled at `limit` tokens per second.
+// Set trustProxy only when the API sits behind a proxy that overwrites X-Real-IP.
+func NewRateLimiter(limit rate.Limit, burst int, trustProxy bool) *RateLimiter {
+	return &RateLimiter{
+		limit:      limit,
+		burst:      burst,
+		trustProxy: trustProxy,
+		visitors:   make(map[string]*visitor),
+		now:        time.Now,
+	}
+}
+
+func (rl *RateLimiter) allow(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := rl.now()
+	if now.Sub(rl.lastSweep) > limiterSweepInterval {
+		for k, v := range rl.visitors {
+			if now.Sub(v.lastSeen) > limiterIdleTTL {
+				delete(rl.visitors, k)
 			}
-			mu.Unlock()
 		}
-	}()
-}
-
-func getLimiter(ip string, r rate.Limit, b int) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-
-	il, exists := limiters[ip]
-	if !exists {
-		limiter := rate.NewLimiter(r, b)
-		limiters[ip] = &ipLimiter{limiter: limiter, lastSeen: time.Now()}
-		return limiter
+		rl.lastSweep = now
 	}
 
-	il.lastSeen = time.Now()
-	return il.limiter
+	v, ok := rl.visitors[key]
+	if !ok {
+		v = &visitor{limiter: rate.NewLimiter(rl.limit, rl.burst)}
+		rl.visitors[key] = v
+	}
+	v.lastSeen = now
+	return v.limiter.AllowN(now, 1)
 }
 
-// RateLimit limits requests per IP.
-// r: requests per second, b: burst allowance
-func RateLimit(r rate.Limit, b int) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, rHttp *http.Request) {
-			ip := rHttp.RemoteAddr
+func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !rl.allow(ClientIP(r, rl.trustProxy)) {
+			w.Header().Set("Retry-After", "60")
+			response.Error(w, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", "Too many requests, please try again later")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-			limiter := getLimiter(ip, r, b)
-			if !limiter.Allow() {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusTooManyRequests)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"error": map[string]string{
-						"code":    "RATE_LIMIT_EXCEEDED",
-						"message": "Too many requests, please try again later",
-					},
-				})
-				return
-			}
-
-			next.ServeHTTP(w, rHttp)
-		})
+// ClientIP returns the caller's IP without the ephemeral port. RemoteAddr
+// includes the port, which differs per connection: keying limits on it would
+// give every new connection a fresh budget.
+func ClientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); net.ParseIP(ip) != nil {
+			return ip
+		}
 	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

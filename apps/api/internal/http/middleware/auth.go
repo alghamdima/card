@@ -1,41 +1,34 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
+	"cards-api/internal/http/response"
 	"cards-api/internal/service"
 )
+
+const sessionCookieName = "admin_token"
 
 func RequireAuth(authService *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := ""
-			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				token = strings.TrimPrefix(authHeader, "Bearer ")
-			} else {
-				cookie, err := r.Cookie("admin_token")
-				if err == nil {
-					token = cookie.Value
-				}
-			}
-
-			if token == "" || !authService.ValidateToken(token) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"success": false,
-					"error": map[string]string{
-						"code":    "UNAUTHORIZED",
-						"message": "Authentication required",
-					},
-				})
+			if !authService.ValidateToken(extractToken(r)) {
+				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
 				return
 			}
-
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// extractToken prefers the Authorization header and falls back to the session cookie.
+func extractToken(r *http.Request) string {
+	if scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Bearer") {
+		return strings.TrimSpace(token)
+	}
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		return cookie.Value
+	}
+	return ""
 }

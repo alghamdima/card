@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"cards-api/internal/domain"
@@ -18,165 +20,204 @@ func NewCardRepository(db *sql.DB) *CardRepository {
 	return &CardRepository{db: db}
 }
 
+// CardQuery filters the admin card listings. An empty Slug lists every campaign.
+type CardQuery struct {
+	Slug   string
+	Search string
+	Limit  int
+	Offset int
+}
+
+const cardColumns = `id, campaign_slug, COALESCE(from_name, ''), COALESCE(to_name, ''), COALESCE(message, ''),
+	COALESCE(heading, ''), COALESCE(lang, 'ar'), field_values, COALESCE(device, ''),
+	COALESCE(date_str, ''), COALESCE(time_str, ''), created_at`
+
 func (r *CardRepository) Save(ctx context.Context, card *domain.Card) error {
-	var fieldValuesStr sql.NullString
-	if card.FieldValues != nil {
+	var fieldValues sql.NullString
+	if len(card.FieldValues) > 0 {
 		b, err := json.Marshal(card.FieldValues)
-		if err == nil {
-			fieldValuesStr = sql.NullString{String: string(b), Valid: true}
+		if err != nil {
+			return fmt.Errorf("failed to marshal field values: %w", err)
 		}
+		fieldValues = sql.NullString{String: string(b), Valid: true}
 	}
 
-	query := `
+	res, err := r.db.ExecContext(ctx, `
 		INSERT INTO campaign_cards (campaign_slug, from_name, to_name, message, heading, lang, field_values, device, date_str, time_str)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	res, err := r.db.ExecContext(ctx, query,
+	`,
 		card.CampaignSlug, card.FromName, card.ToName, card.Message,
-		card.Heading, card.Lang, fieldValuesStr, card.Device, card.DateStr, card.TimeStr,
+		card.Heading, card.Lang, fieldValues, card.Device, card.DateStr, card.TimeStr,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save card: %w", err)
 	}
 
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to read new card id: %w", err)
+	}
 	card.ID = id
 	return nil
 }
 
-func (r *CardRepository) GetByCampaignSlug(ctx context.Context, slug string) ([]domain.Card, error) {
-	query := `
-		SELECT id, campaign_slug, from_name, to_name, message, heading, COALESCE(lang, 'ar'), field_values, device, date_str, time_str, created_at
-		FROM campaign_cards
-		WHERE campaign_slug = ?
-		ORDER BY id DESC
-	`
-	rows, err := r.db.QueryContext(ctx, query, slug)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cards by slug: %w", err)
-	}
-	defer rows.Close()
+// List returns one page of cards (newest first) plus the total matching count.
+func (r *CardRepository) List(ctx context.Context, q CardQuery) ([]domain.Card, int, error) {
+	where, args := cardFilter(q)
 
-	var list []domain.Card
-	for rows.Next() {
-		var c domain.Card
-		var createdAtStr string
-		var fieldValuesRaw sql.NullString
-		if err := rows.Scan(
-			&c.ID, &c.CampaignSlug, &c.FromName, &c.ToName, &c.Message,
-			&c.Heading, &c.Lang, &fieldValuesRaw, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
-		); err != nil {
-			return nil, err
-		}
-		if fieldValuesRaw.Valid && fieldValuesRaw.String != "" {
-			_ = json.Unmarshal([]byte(fieldValuesRaw.String), &c.FieldValues)
-		}
-		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-		if c.CreatedAt.IsZero() {
-			c.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		}
-		list = append(list, c)
-	}
-
-	return list, nil
-}
-
-func (r *CardRepository) GetAll(ctx context.Context, limit, offset int) ([]domain.Card, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaign_cards").Scan(&total)
-	if err != nil {
-		return nil, 0, err
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaign_cards"+where, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count cards: %w", err)
 	}
 
-	query := `
-		SELECT id, campaign_slug, from_name, to_name, message, heading, COALESCE(lang, 'ar'), field_values, device, date_str, time_str, created_at
-		FROM campaign_cards
-		ORDER BY id DESC
-		LIMIT ? OFFSET ?
-	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	pageArgs := append(append([]any{}, args...), q.Limit, q.Offset)
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT "+cardColumns+" FROM campaign_cards"+where+" ORDER BY id DESC LIMIT ? OFFSET ?", pageArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get all cards: %w", err)
+		return nil, 0, fmt.Errorf("failed to list cards: %w", err)
 	}
 	defer rows.Close()
 
-	var list []domain.Card
+	list := []domain.Card{}
 	for rows.Next() {
-		var c domain.Card
-		var createdAtStr string
-		var fieldValuesRaw sql.NullString
-		if err := rows.Scan(
-			&c.ID, &c.CampaignSlug, &c.FromName, &c.ToName, &c.Message,
-			&c.Heading, &c.Lang, &fieldValuesRaw, &c.Device, &c.DateStr, &c.TimeStr, &createdAtStr,
-		); err != nil {
+		c, err := scanCard(rows)
+		if err != nil {
 			return nil, 0, err
 		}
-		if fieldValuesRaw.Valid && fieldValuesRaw.String != "" {
-			_ = json.Unmarshal([]byte(fieldValuesRaw.String), &c.FieldValues)
-		}
-		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-		if c.CreatedAt.IsZero() {
-			c.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
-		}
 		list = append(list, c)
 	}
-
-	return list, total, nil
+	return list, total, rows.Err()
 }
 
-func (r *CardRepository) GetCampaignAnalyticsList(ctx context.Context) ([]domain.CampaignAnalytics, error) {
-	query := `
+// ForEachByCampaign streams every card of a campaign (newest first) so large
+// exports never have to be held in memory.
+func (r *CardRepository) ForEachByCampaign(ctx context.Context, slug string, fn func(domain.Card) error) error {
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT "+cardColumns+" FROM campaign_cards WHERE campaign_slug = ? ORDER BY id DESC", slug)
+	if err != nil {
+		return fmt.Errorf("failed to stream cards: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		c, err := scanCard(rows)
+		if err != nil {
+			return err
+		}
+		if err := fn(c); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// GetCampaignAnalyticsList reports per-campaign totals; today is the local
+// "dd/mm/yyyy" date string stored in campaign_cards.date_str.
+func (r *CardRepository) GetCampaignAnalyticsList(ctx context.Context, today string) ([]domain.CampaignAnalytics, error) {
+	rows, err := r.db.QueryContext(ctx, `
 		SELECT c.slug, c.title,
-		       COUNT(k.id) as total_cards,
-		       COALESCE(SUM(CASE WHEN k.date_str = ? OR date(k.created_at) = date('now') THEN 1 ELSE 0 END), 0) as cards_today,
-		       COALESCE(MAX(k.created_at), '') as last_card_at
+		       COUNT(k.id),
+		       COALESCE(SUM(CASE WHEN k.date_str = ? THEN 1 ELSE 0 END), 0),
+		       COALESCE(MAX(k.created_at), '')
 		FROM campaigns c
-		LEFT JOIN campaign_cards k ON c.slug = k.campaign_slug
+		LEFT JOIN campaign_cards k ON k.campaign_slug = c.slug
 		GROUP BY c.slug
-		ORDER BY total_cards DESC, c.id DESC
-	`
-	today := time.Now().Format("02/01/2006")
-	rows, err := r.db.QueryContext(ctx, query, today)
+		ORDER BY COUNT(k.id) DESC, c.id DESC
+	`, today)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query campaign analytics: %w", err)
 	}
 	defer rows.Close()
 
-	var list []domain.CampaignAnalytics
+	list := []domain.CampaignAnalytics{}
 	for rows.Next() {
 		var item domain.CampaignAnalytics
-		if err := rows.Scan(&item.Slug, &item.Title, &item.TotalCards, &item.CardsToday, &item.LastCardAt); err != nil {
-			return nil, err
+		var lastCardAt string
+		if err := rows.Scan(&item.Slug, &item.Title, &item.TotalCards, &item.CardsToday, &lastCardAt); err != nil {
+			return nil, fmt.Errorf("failed to scan campaign analytics: %w", err)
+		}
+		if t := parseDBTime(lastCardAt); !t.IsZero() {
+			item.LastCardAt = t.Format(time.RFC3339)
 		}
 		list = append(list, item)
 	}
-
-	return list, nil
+	return list, rows.Err()
 }
 
-func (r *CardRepository) GetDashboardStats(ctx context.Context) (*domain.DashboardStats, error) {
-	stats := &domain.DashboardStats{
-		DeviceStats: make(map[string]int),
+func (r *CardRepository) GetDashboardStats(ctx context.Context, today string) (*domain.DashboardStats, error) {
+	stats := &domain.DashboardStats{DeviceStats: make(map[string]int)}
+
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*), COALESCE(SUM(active), 0) FROM campaigns",
+	).Scan(&stats.TotalCampaigns, &stats.ActiveCampaigns); err != nil {
+		return nil, fmt.Errorf("failed to count campaigns: %w", err)
 	}
 
-	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaigns").Scan(&stats.TotalCampaigns)
-	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaigns WHERE active = 1").Scan(&stats.ActiveCampaigns)
-	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaign_cards").Scan(&stats.TotalCards)
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*), COALESCE(SUM(CASE WHEN date_str = ? THEN 1 ELSE 0 END), 0) FROM campaign_cards", today,
+	).Scan(&stats.TotalCards, &stats.CardsToday); err != nil {
+		return nil, fmt.Errorf("failed to count cards: %w", err)
+	}
 
-	today := time.Now().Format("02/01/2006")
-	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM campaign_cards WHERE date_str = ? OR date(created_at) = date('now')", today).Scan(&stats.CardsToday)
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT COALESCE(NULLIF(device, ''), 'Unknown'), COUNT(*) FROM campaign_cards GROUP BY 1")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query device stats: %w", err)
+	}
+	defer rows.Close()
 
-	rows, err := r.db.QueryContext(ctx, "SELECT COALESCE(device, 'Unknown'), COUNT(*) FROM campaign_cards GROUP BY device")
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var dev string
-			var count int
-			if err := rows.Scan(&dev, &count); err == nil {
-				stats.DeviceStats[dev] = count
-			}
+	for rows.Next() {
+		var device string
+		var count int
+		if err := rows.Scan(&device, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan device stats: %w", err)
+		}
+		stats.DeviceStats[device] = count
+	}
+	return stats, rows.Err()
+}
+
+func cardFilter(q CardQuery) (string, []any) {
+	var conds []string
+	var args []any
+
+	if q.Slug != "" {
+		conds = append(conds, "campaign_slug = ?")
+		args = append(args, q.Slug)
+	}
+	if q.Search != "" {
+		pattern := "%" + escapeLike(q.Search) + "%"
+		conds = append(conds, `(to_name LIKE ? ESCAPE '\' OR from_name LIKE ? ESCAPE '\' OR message LIKE ? ESCAPE '\' OR field_values LIKE ? ESCAPE '\')`)
+		args = append(args, pattern, pattern, pattern, pattern)
+	}
+
+	if len(conds) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+func scanCard(row interface{ Scan(dest ...any) error }) (domain.Card, error) {
+	var c domain.Card
+	var createdAt string
+	var fieldValues sql.NullString
+
+	if err := row.Scan(
+		&c.ID, &c.CampaignSlug, &c.FromName, &c.ToName, &c.Message, &c.Heading,
+		&c.Lang, &fieldValues, &c.Device, &c.DateStr, &c.TimeStr, &createdAt,
+	); err != nil {
+		return c, fmt.Errorf("failed to scan card: %w", err)
+	}
+
+	if fieldValues.Valid && fieldValues.String != "" {
+		if err := json.Unmarshal([]byte(fieldValues.String), &c.FieldValues); err != nil {
+			log.Printf("card %d has invalid field_values JSON: %v", c.ID, err)
 		}
 	}
-
-	return stats, nil
+	c.CreatedAt = parseDBTime(createdAt)
+	return c, nil
 }
