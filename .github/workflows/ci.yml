@@ -72,7 +72,7 @@ jobs:
           npm run build
 
   docker:
-    name: Docker images & nginx config
+    name: Docker images & compose config
     runs-on: ubuntu-latest
     needs: [test-api, build-web]
     steps:
@@ -81,13 +81,7 @@ jobs:
       - name: Validate docker compose file
         run: |
           ADMIN_PASSWORD=ci-password SESSION_SECRET=ci-secret-ci-secret-ci-secret-1234 \
-            docker compose -f infra/docker-compose.yml config --quiet
+            docker compose config --quiet
 
       - name: Build API image
         run: docker build -t cards-api:ci apps/api
-
-      - name: Build web image (SPA + nginx)
-        run: docker build -f apps/web/Dockerfile -t cards-web:ci .
-
-      - name: Validate nginx configuration
-        run: docker run --rm cards-web:ci nginx -t

@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { BoxesConfig, BoxItem } from '../../types/campaign.types';
 
 export const CANVAS_W = 1080;

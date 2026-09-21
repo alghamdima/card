@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
   import { t, locale, translateError } from '$lib/i18n';
@@ -211,7 +212,7 @@
     <header class="card-header-bar">
       <!-- Start: Back to Home -->
       <div class="header-side start">
-        <a href="/" class="back-link" title={$t('app.back')}>
+        <a href="{base}/" class="back-link" title={$t('app.back')}>
           <span class="arrow" aria-hidden="true">{$locale === 'ar' ? '→' : '←'}</span>
           <span class="back-text">{$t('app.back')}</span>
         </a>
@@ -219,7 +220,7 @@
 
       <!-- Center: Clean Brand Identity -->
       <div class="header-center">
-        <a href="/" class="brand-link" title={$t('app.companyName')}>
+        <a href="{base}/" class="brand-link" title={$t('app.companyName')}>
           <BrandLogo />
         </a>
       </div>

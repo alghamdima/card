@@ -1,6 +1,6 @@
 .PHONY: help dev-api dev-web build build-web build-api test test-web lint up down logs backup-db restore-db clean
 
-COMPOSE = docker compose --env-file .env -f infra/docker-compose.yml
+COMPOSE = docker compose --env-file .env -f docker-compose.yml
 
 help:
 	@echo "Available commands:"

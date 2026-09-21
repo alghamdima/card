@@ -3,6 +3,7 @@
   import { t } from '$lib/i18n';
   import Button from '$lib/components/ui/Button.svelte';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
 
   let isNotFound = $derived(page.status === 404);
 </script>
@@ -17,7 +18,7 @@
   {#if isNotFound}
     <p class="text">{$t('app.notFoundText')}</p>
   {/if}
-  <Button variant="primary" onclick={() => goto('/')}>{$t('app.backHome')}</Button>
+  <Button variant="primary" onclick={() => goto(`${base}/`)}>{$t('app.backHome')}</Button>
 </main>
 
 <style>

@@ -13,7 +13,8 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE = '/api/v1';
+import { base } from '$app/paths';
+const API_BASE = `${base}/api/v1`;
 const DEFAULT_TIMEOUT_MS = 30_000;
 export const TOKEN_KEY = 'admin_token';
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   import { isAnonymousSender } from '$lib/utils/cards';
   import { t, locale, formatDate, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
@@ -254,7 +255,7 @@
   }
 
   async function copyLink(slug: string) {
-    const ok = await copyText(`${window.location.origin}/cards/${slug}`);
+    const ok = await copyText(`${window.location.origin}${base}/cards/${slug}`);
     showToast(ok ? $t('app.copied') : $t('app.copyFailed'), ok ? 'success' : 'error');
   }
 
@@ -305,7 +306,7 @@
                 </td>
                 <td>
                   <div class="link-actions">
-                    <a href="/cards/{camp.slug}" target="_blank" rel="noopener" class="slug-badge">
+                    <a href="{base}/cards/{camp.slug}" target="_blank" rel="noopener" class="slug-badge">
                       /cards/{camp.slug}
                     </a>
                     <button

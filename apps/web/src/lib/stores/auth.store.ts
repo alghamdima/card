@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import { goto } from '$app/navigation';
 import { get, writable } from 'svelte/store';
 import { authApi } from '../api/auth';
@@ -19,7 +20,7 @@ function clearSession() {
 setUnauthorizedHandler(() => {
   if (!get(isAuthenticated)) return;
   clearSession();
-  goto('/login');
+  goto(`${base}/login`);
 });
 
 export const authStore = {

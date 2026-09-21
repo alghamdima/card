@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { page } from '$app/state';
   import { t } from '../../i18n';
   import { authStore } from '../../stores/auth.store';
@@ -15,13 +16,13 @@
 
   async function handleLogout() {
     await authStore.logout();
-    goto('/login');
+    goto(`${base}/login`);
   }
 </script>
 
 <header class="admin-header">
   <div class="brand">
-    <a href="/admin/dashboard" class="logo" title={$t('app.companyName')}>
+    <a href="{base}/admin/dashboard" class="logo" title={$t('app.companyName')}>
       <BrandLogo />
     </a>
   </div>
@@ -29,10 +30,10 @@
   <nav class="nav-links">
     {#each links as link (link.href)}
       <a
-        href={link.href}
+        href="{base}{link.href}"
         class="nav-link"
-        class:active={page.url.pathname.startsWith(link.href)}
-        aria-current={page.url.pathname.startsWith(link.href) ? 'page' : undefined}
+        class:active={page.url.pathname.startsWith(`${base}${link.href}`)}
+        aria-current={page.url.pathname.startsWith(`${base}${link.href}`) ? 'page' : undefined}
       >
         {$t(link.label)}
       </a>

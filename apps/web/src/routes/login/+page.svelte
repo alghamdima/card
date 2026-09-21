@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { t, locale, translateError } from '$lib/i18n';
   import { authStore } from '$lib/stores/auth.store';
   import BrandLogo from '$lib/components/ui/BrandLogo.svelte';
@@ -15,7 +16,7 @@
 
   onMount(async () => {
     if (await authStore.checkAuth()) {
-      goto('/admin/dashboard');
+      goto(`${base}/admin/dashboard`);
     }
   });
 
@@ -30,7 +31,7 @@
     errorMsg = '';
     try {
       await authStore.login(password);
-      goto('/admin/dashboard');
+      goto(`${base}/admin/dashboard`);
     } catch (e) {
       errorMsg = (e as { code?: string })?.code === 'INVALID_CREDENTIALS' ? $t('login.invalidPassword') : translateError(e);
     } finally {
@@ -45,7 +46,7 @@
 
 <div class="login-page">
   <div class="top-bar">
-    <a href="/" class="back-link">{$locale === 'ar' ? '→' : '←'} {$t('app.back')}</a>
+    <a href="{base}/" class="back-link">{$locale === 'ar' ? '→' : '←'} {$t('app.back')}</a>
     <div class="controls-wrap">
       <ThemeSwitcher />
       <LanguageSwitcher />

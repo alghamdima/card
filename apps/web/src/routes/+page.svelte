@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   import { t, locale, translateError } from '$lib/i18n';
   import { campaignsApi } from '$lib/api/campaigns';
   import type { PublicCampaignSummary } from '$lib/types/campaign.types';
@@ -47,7 +48,7 @@
   <!-- Minimal Top Navigation Bar -->
   <header class="top-nav-bar">
     <div class="brand-group">
-      <a href="/" class="brand-link" title={$t('app.companyName')}>
+      <a href="{base}/" class="brand-link" title={$t('app.companyName')}>
         <BrandLogo />
       </a>
     </div>
@@ -75,7 +76,7 @@
     {:else}
       <div class="campaign-grid">
         {#each campaigns as camp (camp.slug)}
-          <a href="/cards/{camp.slug}" class="campaign-card">
+          <a href="{base}/cards/{camp.slug}" class="campaign-card">
             {#if camp.thumb}
               <div class="card-thumb-wrap">
                 <img src={camp.thumb} alt={getCampaignTitle(camp, $locale)} loading="lazy" decoding="async" />
@@ -106,7 +107,7 @@
   <footer class="page-footer">
     <div class="footer-inner">
       <p>{$t('app.companyName')} &middot; {$t('app.allRightsReserved')} {year}</p>
-      <a href="/login" class="admin-link">{$t('nav.admin')}</a>
+      <a href="{base}/login" class="admin-link">{$t('nav.admin')}</a>
     </div>
   </footer>
 </div>

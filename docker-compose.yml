@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: cards-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    env_file:
+      - .env
+    environment:
+      PORT: "8080"
+      APP_ENV: production
+      DATABASE_PATH: /data/cards.db
+      MIGRATIONS_PATH: /app/migrations
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Riyadh}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+      TRUST_PROXY: "true"
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+    volumes:
+      - cards_db_data:/data
+    networks:
+      - jameelbi-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  cards_db_data:
+    name: cards_db_data
+
+networks:
+  jameelbi-net:
+    external: true

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { t } from '$lib/i18n';
   import { authStore, isAuthenticated } from '$lib/stores/auth.store';
   import AdminHeader from '$lib/components/admin/AdminHeader.svelte';
@@ -17,7 +18,7 @@
   onMount(async () => {
     const ok = await authStore.checkAuth();
     if (!ok) {
-      goto('/login');
+      goto(`${base}/login`);
     }
     checking = false;
   });
