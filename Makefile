@@ -1,30 +1,55 @@
-.PHONY: help dev build test lint up down migrate-up backup-db restore-db clean
+.PHONY: help dev-api dev-web build build-web build-api test test-web lint up down logs backup-db restore-db clean
+
+COMPOSE = docker compose --env-file .env -f infra/docker-compose.yml
 
 help:
 	@echo "Available commands:"
-	@echo "  make up          - Build and start all Docker services via Docker Compose"
-	@echo "  make down        - Stop and tear down Docker services"
-	@echo "  make build       - Build both Go API and SvelteKit web static output"
-	@echo "  make test        - Run tests for Go API"
+	@echo "  make up          - Build and start all services with Docker Compose (needs .env, see .env.example)"
+	@echo "  make down        - Stop and remove the services (the database volume is kept)"
+	@echo "  make logs        - Follow the service logs"
+	@echo "  make dev-api     - Run the Go API locally (APP_ENV=development, SQLite in apps/api/data)"
+	@echo "  make dev-web     - Run the SvelteKit dev server (proxies /api to the local API)"
+	@echo "  make build       - Build the Go API binary and the static web output"
+	@echo "  make test        - Run the Go tests"
+	@echo "  make lint        - gofmt / go vet / svelte-check"
 	@echo "  make backup-db   - Create a safe online SQLite backup"
-	@echo "  make clean       - Clean temporary build outputs and node_modules"
+	@echo "  make restore-db  - Restore a backup: make restore-db FILE=path/to/backup.db.gz"
+	@echo "  make clean       - Remove build outputs"
 
-up: build
-	docker compose -f infra/docker-compose.yml up -d --build
+# Fail early with a clear message instead of a confusing compose error.
+.env:
+	@echo "Missing .env - run: cp .env.example .env  (then set ADMIN_PASSWORD and SESSION_SECRET)"; exit 1
 
-down:
-	docker compose -f infra/docker-compose.yml down
+up: .env
+	$(COMPOSE) up -d --build
+
+down: .env
+	$(COMPOSE) down
+
+logs: .env
+	$(COMPOSE) logs -f --tail=100
+
+dev-api:
+	cd apps/api && APP_ENV=development DATABASE_PATH=./data/cards.db MIGRATIONS_PATH=./migrations go run ./cmd/server
+
+dev-web:
+	cd apps/web && npm run dev
 
 build: build-web build-api
 
 build-web:
-	cd apps/web && npm install && npm run build
+	cd apps/web && npm ci && npm run build
 
 build-api:
-	cd apps/api && go mod tidy && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/cards-api ./cmd/server/main.go
+	cd apps/api && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/cards-api ./cmd/server
 
 test:
-	cd apps/api && go test -v ./...
+	cd apps/api && go test ./...
+
+lint:
+	@cd apps/api && test -z "$$(gofmt -l .)" || (echo "gofmt needed on:"; gofmt -l .; exit 1)
+	cd apps/api && go vet ./...
+	cd apps/web && npm run check && npm run check:i18n
 
 backup-db:
 	./scripts/backup-sqlite.sh

@@ -1,0 +1,13 @@
+# Build context for apps/web/Dockerfile is the repository root.
+.git
+**/node_modules
+apps/web/build
+apps/web/.svelte-kit
+apps/api
+docs
+backups
+data
+*.db
+.env
+.env.*
+!.env.example
